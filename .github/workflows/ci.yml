@@ -67,10 +67,17 @@ jobs:
         ports: ["8123:8123"]
         options: >-
           --health-cmd "wget -qO- http://127.0.0.1:8123/ping" --health-interval 2s --health-retries 60
+      foundationdb:
+        image: foundationdb/foundationdb:7.3.69
+        env:
+          FDB_NETWORKING_MODE: host
+          FDB_PORT: "4500"
+        ports: ["4500:4500"]
     env:
       RIFT_REQUIRE_DOCKER: "1"
       # GPUI debug info fills the runner's disk; tests don't need it.
       CARGO_PROFILE_DEV_DEBUG: "0"
+      RIFT_FDB_CLUSTER: docker:docker@127.0.0.1:4500
     steps:
       - name: Free disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
@@ -81,6 +88,12 @@ jobs:
           sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
             libx11-xcb-dev libxcb1-dev libvulkan-dev libfontconfig-dev libfreetype-dev \
             libasound2-dev libssl-dev pkg-config
+      - name: Install the FoundationDB client and create the database
+        run: |
+          curl -fsSL -o /tmp/fdb.deb https://github.com/apple/foundationdb/releases/download/7.3.69/foundationdb-clients_7.3.69-1_amd64.deb
+          sudo dpkg -i /tmp/fdb.deb
+          echo "$RIFT_FDB_CLUSTER" > /tmp/fdb.cluster
+          fdbcli -C /tmp/fdb.cluster --exec "configure new single memory" --timeout 60
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
