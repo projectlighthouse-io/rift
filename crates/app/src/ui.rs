@@ -170,6 +170,63 @@ pub(crate) fn input(
         .with_size(gpui_component::Size::Size(px(text_px / 0.875)))
 }
 
+/// Data / Structure style toggle. `on_select` receives the clicked index.
+pub(crate) fn segmented<const N: usize>(
+    items: [(&'static str, bool); N],
+    on_select: impl Fn(&usize, &mut gpui::Window, &mut App) + 'static,
+) -> Div {
+    let on_select = std::rc::Rc::new(on_select);
+    div()
+        .flex()
+        .gap(px(2.))
+        .p(px(2.))
+        .rounded(px(7.))
+        .bg(c(theme::BG))
+        .border_1()
+        .border_color(c(theme::LINE))
+        .children(items.into_iter().enumerate().map(|(ix, (label, active))| {
+            let on_select = on_select.clone();
+            div()
+                .id(("segment", ix))
+                .flex()
+                .items_center()
+                .h(px(26.))
+                .px(px(12.))
+                .rounded(px(5.))
+                .text_size(px(12.5))
+                .font_weight(FontWeight::MEDIUM)
+                .cursor_pointer()
+                .map(|d| {
+                    if active {
+                        d.bg(c(theme::RAISED))
+                            .text_color(c(theme::TEXT))
+                            .border_1()
+                            .border_color(c(theme::LINE))
+                    } else {
+                        d.text_color(c(theme::MUTED))
+                            .hover(|d| d.text_color(c(theme::TEXT)))
+                    }
+                })
+                .child(label)
+                .on_click(move |_, window, cx| on_select(&ix, window, cx))
+        }))
+}
+
+/// `319488` → `312 kB` (1024-based, like `pg_size_pretty`).
+pub(crate) fn bytes(n: u64) -> String {
+    const UNITS: [&str; 4] = ["kB", "MB", "GB", "TB"];
+    if n < 1024 {
+        return format!("{n} bytes");
+    }
+    let mut value = n as f64 / 1024.0;
+    let mut unit = 0;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    format!("{} {}", value.round() as u64, UNITS[unit])
+}
+
 /// `1284` → `1,284`.
 pub(crate) fn thousands(n: u64) -> String {
     let digits = n.to_string();
@@ -185,6 +242,14 @@ pub(crate) fn thousands(n: u64) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn bytes_are_pretty() {
+        assert_eq!(super::bytes(319_488), "312 kB");
+        assert_eq!(super::bytes(49_152), "48 kB");
+        assert_eq!(super::bytes(800), "800 bytes");
+        assert_eq!(super::bytes(5 * 1024 * 1024), "5 MB");
+    }
+
     #[test]
     fn thousands_groups_digits() {
         assert_eq!(super::thousands(1284), "1,284");
