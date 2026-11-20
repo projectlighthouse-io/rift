@@ -178,3 +178,24 @@ Format: date, decision, reason.
   `memory_stats()` adds the right panel, `key_expiry()` shows TTL and Set TTL, and the
   "+" query tab and top-bar SQL button only appear when `query()` is available.
 - **Conformance runs in Redis db 15** so the seed data in db 0 is untouched.
+
+## 2026-11-20 — M9
+
+- **ClickHouse over HTTP (reqwest), not the native protocol.** Results stream as
+  `JSONCompactEachRowWithNamesAndTypes`, so any column type maps to a `Value` at runtime
+  (unknown types like `AggregateFunction` fall back to `Value::Unknown`). Each query carries a
+  `query_id`; cancel sends `KILL QUERY … ASYNC`. Read-only safe mode sets `readonly=2`.
+- **ClickHouse is read-mostly:** no `EditRows`, no `Transactions`. It does `EditSchema`
+  (non-transactional) and `TableTtl`. The sidebar says so whenever `edit_rows()` is `None`.
+- **Charts aggregate in the database.** `dialect::chart::aggregate_sql` wraps the statement as a
+  subquery (or uses the table) with one `GROUP BY`, date buckets per dialect, and
+  `LIMIT MAX_CHART_POINTS + 1` to detect truncation. The 4M-row daily aggregation runs in
+  ~70 ms on ClickHouse.
+- **Charts are painted directly** with GPUI paths and quads (no chart library). Export PNG
+  renders the same chart as SVG through resvg with the bundled serif font.
+- **Pin to dashboard** appends a `ChartCard` to the connection's first dashboard, creating
+  "Overview" if none exists (dashboards UI is M10).
+- **Column stats** come from two queries (totals, then top 8 values) on the whole table, shown
+  in a popover from the column header. "Chart this column" opens a query tab with the
+  `GROUP BY`.
+- **New conformance suite: `table_ttl_suite`** (set, read, remove a table TTL).
