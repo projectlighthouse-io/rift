@@ -36,11 +36,15 @@ foundationdb-driver = { path = "crates/drivers/foundationdb" }
 
 anyhow = "1.0.104"
 chrono = { version = "0.4.45", features = ["serde"] }
+dirs = "7.0.0"
 futures = "0.3.34"
 gpui = { package = "gpui-pre", version = "=0.3.12" }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
 gpui-kit-assets = "=0.10.0"
 gpui-component = { version = "=0.10.0", features = ["tree-sitter-sql"] }
+keyring = "4.2.0"
+refinery = { version = "0.10.0", features = ["rusqlite"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
 rust_decimal = { version = "1.43.0", features = ["serde-str"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
