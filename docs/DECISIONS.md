@@ -143,3 +143,19 @@ Format: date, decision, reason.
 - **Copy as CSV / JSON / INSERT** and **Export** (CSV via a save dialog) use `export.rs`.
 - **Decimal and float cells group thousands** (`1,842.50`), as in the design; integers do not
   (ids stay `1041`).
+
+## 2026-11-20 — M7
+
+- **SQLite opens the file per operation** on a blocking thread (`spawn_blocking`): long reads
+  never hold a lock other views need. Rows stream through a bounded channel from the blocking
+  thread (`block_on(send)` applies backpressure). Cancel calls `sqlite3_interrupt` via the
+  connection's interrupt handle. `BOOLEAN`-declared integers become `Value::Bool`.
+- **MySQL on sqlx** like Postgres: text protocol results, `KILL QUERY <CONNECTION_ID()>` from a
+  side connection to cancel, `found_rows` on so updates report matched rows, statement cache
+  off. `tinyint(1)` (sqlx reports `BOOLEAN`) → bool, `UNSIGNED` → `UInt`, inline `ENUM` → text.
+- **MySQL has no schema level:** the driver reports databases as schemas; the sidebar shows the
+  database once when it equals the schema (data-driven, not a driver check).
+- **Non-transactional DDL** (`EditSchema::transactional_ddl() == false`) shows a "Cannot be
+  rolled back" badge next to pending structure changes.
+- **The sidebar's database · schema box is a picker** of `Browse::schemas()`.
+- **Docker MySQL is 8.4 LTS** (`RIFT_MYSQL_PORT`, root password `mysql`, database `shop`).
