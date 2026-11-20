@@ -160,8 +160,14 @@ impl Grid {
         }
     }
 
-    pub(crate) fn row_count(&self) -> usize {
-        self.rows.len()
+    /// Columns shown.
+    pub(crate) fn columns(&self) -> &[Column] {
+        &self.columns
+    }
+
+    /// Cell values of every row, for copy and export.
+    pub(crate) fn values(&self) -> impl Iterator<Item = &[Value]> {
+        self.rows.iter().map(|r| r.values.as_slice())
     }
 
     /// Selects a row (and its first cell) and scrolls to it.
@@ -438,12 +444,30 @@ impl Grid {
 
 /// Display text for a cell: one line, capped length.
 fn cell_text(value: &Value) -> String {
-    value
-        .to_string()
-        .chars()
+    let text = match value {
+        Value::Decimal(_) | Value::Float(_) => group_digits(&value.to_string()),
+        _ => value.to_string(),
+    };
+    text.chars()
         .take(MAX_CELL_CHARS)
         .map(|ch| if ch == '\n' { ' ' } else { ch })
         .collect()
+}
+
+/// `1842.50` → `1,842.50`; leaves anything that is not a plain number alone.
+fn group_digits(text: &str) -> String {
+    let (sign, rest) = text.strip_prefix('-').map_or(("", text), |r| ("-", r));
+    let (int, frac) = rest
+        .split_once('.')
+        .map_or((rest, None), |(i, f)| (i, Some(f)));
+    if int.len() <= 3 || !int.bytes().all(|b| b.is_ascii_digit()) {
+        return text.to_owned();
+    }
+    let grouped = crate::ui::thousands(int.parse().unwrap_or_default());
+    match frac {
+        Some(f) => format!("{sign}{grouped}.{f}"),
+        None => format!("{sign}{grouped}"),
+    }
 }
 
 impl Render for Grid {
@@ -489,5 +513,16 @@ impl Render for Grid {
                         .track_scroll(&self.scroll),
                     ),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn groups_decimal_digits() {
+        assert_eq!(super::group_digits("1842.50"), "1,842.50");
+        assert_eq!(super::group_digits("-12345"), "-12,345");
+        assert_eq!(super::group_digits("99.99"), "99.99");
+        assert_eq!(super::group_digits("NaN"), "NaN");
     }
 }
