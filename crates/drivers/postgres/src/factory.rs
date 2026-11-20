@@ -88,7 +88,10 @@ impl DriverFactory for PgFactory {
                 .acquire_timeout(Duration::from_secs(10))
                 .connect_with(options.clone())
                 .await
-                .map_err(|e| Error::connect(e.to_string()))?;
+                .map_err(|e| match e {
+                    sqlx::Error::Database(db) => Error::connect(db.message()),
+                    other => Error::connect(other.to_string()),
+                })?;
             let version: String = sqlx::query_scalar("SHOW server_version")
                 .fetch_one(&pool)
                 .await
