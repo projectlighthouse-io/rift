@@ -8,10 +8,10 @@ use gpui::{
 };
 use gpui_component::input::{InputEvent, InputState};
 use traits::Connection;
-use types::{DbObject, Error, ObjectKind, SchemaName, TableRef, Tag};
+use types::{DbObject, Error, Filter, ObjectKind, SchemaName, TableRef, Tag};
 
 use crate::result_view::ResultView;
-use crate::table_view::TableView;
+use crate::table_view::{OpenTable, TableView};
 use crate::theme::{self, c};
 use crate::{runtime, ui};
 
@@ -133,18 +133,41 @@ impl Session {
         ));
     }
 
-    /// Opens (or focuses) a table document.
-    pub(crate) fn open_table(&mut self, table: TableRef, cx: &mut Context<Self>) {
-        let existing = self.docs.iter().position(|d| match d {
-            Doc::Table(v) => v.read(cx).table == table,
-            Doc::Result(_) => false,
+    /// Opens (or focuses) a table document. A filter always opens a new tab.
+    pub(crate) fn open_table(
+        &mut self,
+        table: TableRef,
+        filter: Option<Filter>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let existing = filter.is_none().then(|| {
+            self.docs.iter().position(|d| match d {
+                Doc::Table(v) => v.read(cx).table == table,
+                Doc::Result(_) => false,
+            })
         });
-        let ix = existing.unwrap_or_else(|| {
-            let conn = self.conn.clone();
-            self.docs
-                .push(Doc::Table(cx.new(|cx| TableView::new(conn, table, cx))));
-            self.docs.len() - 1
-        });
+        let ix = match existing.flatten() {
+            Some(ix) => ix,
+            None => {
+                let conn = self.conn.clone();
+                let view = cx.new(|cx| TableView::new(conn, table, filter, window, cx));
+                self._subscriptions.push(cx.subscribe_in(
+                    &view,
+                    window,
+                    |this, _, event: &OpenTable, window, cx| {
+                        this.open_table(
+                            event.table.clone(),
+                            Some(event.filter.clone()),
+                            window,
+                            cx,
+                        );
+                    },
+                ));
+                self.docs.push(Doc::Table(view));
+                self.docs.len() - 1
+            }
+        };
         self.active = Some(ix);
         cx.notify();
     }
@@ -361,9 +384,9 @@ impl Session {
                             .child(SharedString::from(object.table.name.to_string())),
                     );
                 nav = nav.child(if openable {
-                    row.on_click(
-                        cx.listener(move |this, _, _, cx| this.open_table(table.clone(), cx)),
-                    )
+                    row.on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_table(table.clone(), None, window, cx)
+                    }))
                 } else {
                     row
                 });

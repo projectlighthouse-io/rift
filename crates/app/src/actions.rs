@@ -9,6 +9,8 @@ actions!(
         NewConnection,
         /// Edit the highlighted connection.
         EditConnection,
+        /// Save pending changes.
+        SaveChanges,
     ]
 );
 
@@ -28,5 +30,6 @@ pub(crate) fn bind(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new(cmd!("n"), NewConnection, Some("Connections")),
         KeyBinding::new(cmd!("e"), EditConnection, Some("Connections")),
+        KeyBinding::new(cmd!("s"), SaveChanges, Some("TableView")),
     ]);
 }

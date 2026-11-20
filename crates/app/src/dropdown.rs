@@ -31,6 +31,24 @@ impl Dropdown {
         }
     }
 
+    /// Trigger height (34 in forms, 28 in toolbars).
+    pub(crate) fn height(mut self, height: f32) -> Self {
+        self.height = height;
+        self
+    }
+
+    /// Render values in the mono font (column names).
+    pub(crate) fn mono(mut self) -> Self {
+        self.mono = true;
+        self
+    }
+
+    /// Replaces the options.
+    pub(crate) fn set_options(&mut self, options: Vec<SharedString>, selected: usize) {
+        self.options = options;
+        self.selected = selected.min(self.options.len().saturating_sub(1));
+    }
+
     pub(crate) fn selected(&self) -> usize {
         self.selected
     }
