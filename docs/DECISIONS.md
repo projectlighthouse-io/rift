@@ -159,3 +159,22 @@ Format: date, decision, reason.
   rolled back" badge next to pending structure changes.
 - **The sidebar's database · schema box is a picker** of `Browse::schemas()`.
 - **Docker MySQL is 8.4 LTS** (`RIFT_MYSQL_PORT`, root password `mysql`, database `shop`).
+
+## 2026-11-20 — M8
+
+- **redis 1.8 (latest stable) with a tokio `ConnectionManager`** (auto-reconnect). The 2.0 line
+  is still a release candidate.
+- **Key tree is filled by a background `SCAN` loop** (`COUNT 1000`, `MATCH` from the pattern box,
+  pipelined `TYPE` per page) streaming batches to the UI; duplicates `SCAN` may return are
+  dropped. Keys group by the text up to the first `:`; expanded groups show 4 keys, then
+  "… N more" adds 200 at a time. Never `KEYS`.
+- **Values are read and written whole** (`KeyValue::get/set`): `set` runs `DEL` + the typed
+  write in `MULTI`/`EXEC` and restores the `PTTL`. Hash fields, list items, set and zset
+  members are edited by writing the new whole value. Simple and correct; very large
+  collections should get per-field ops later.
+- **Memory panel** uses `INFO memory` and `DBSIZE` for totals and a 2,000-key `MEMORY USAGE`
+  sample scaled to the keyspace for the breakdowns (marked "sampled").
+- **The UI picks screens by capability:** `key_value()` swaps the SQL sidebar for the key tree,
+  `memory_stats()` adds the right panel, `key_expiry()` shows TTL and Set TTL, and the
+  "+" query tab and top-bar SQL button only appear when `query()` is available.
+- **Conformance runs in Redis db 15** so the seed data in db 0 is untouched.
