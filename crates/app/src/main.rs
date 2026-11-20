@@ -10,6 +10,7 @@ mod result_view;
 mod runtime;
 mod session;
 mod state;
+mod structure_view;
 mod table_view;
 mod theme;
 mod ui;

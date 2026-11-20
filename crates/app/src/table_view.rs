@@ -20,6 +20,7 @@ use types::{
 use crate::actions::SaveChanges;
 use crate::dropdown::Dropdown;
 use crate::grid::{Grid, GridEvent, GridRow, RowMark};
+use crate::structure_view::{StructureEvent, StructureView};
 use crate::theme::{self, c};
 use crate::{runtime, ui};
 
@@ -101,6 +102,8 @@ pub(crate) struct TableView {
     selected: Option<usize>,
     inspector: Option<Inspector>,
     columns_menu: bool,
+    structure: Option<Entity<StructureView>>,
+    show_structure: bool,
     _tasks: Vec<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -149,6 +152,8 @@ impl TableView {
             selected: None,
             inspector: None,
             columns_menu: false,
+            structure: None,
+            show_structure: false,
             _tasks: Vec::new(),
             _subscriptions: vec![subscription],
         };
@@ -573,28 +578,6 @@ impl TableView {
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let mono = theme::mono(cx);
-        let segment = |label: &'static str, active: bool| {
-            div()
-                .flex()
-                .items_center()
-                .h(px(26.))
-                .px(px(12.))
-                .rounded(px(5.))
-                .text_size(px(12.5))
-                .font_weight(FontWeight::MEDIUM)
-                .cursor_pointer()
-                .map(|d| {
-                    if active {
-                        d.bg(c(theme::RAISED))
-                            .text_color(c(theme::TEXT))
-                            .border_1()
-                            .border_color(c(theme::LINE))
-                    } else {
-                        d.text_color(c(theme::MUTED))
-                    }
-                })
-                .child(label)
-        };
         let filters = div()
             .flex()
             .flex_wrap()
@@ -683,21 +666,42 @@ impl TableView {
             .py(px(8.))
             .border_b_1()
             .border_color(c(theme::LINE))
-            .child(
-                div()
-                    .flex()
-                    .gap(px(2.))
-                    .p(px(2.))
-                    .rounded(px(7.))
-                    .bg(c(theme::BG))
-                    .border_1()
-                    .border_color(c(theme::LINE))
-                    .child(segment("Data", true))
-                    .child(segment("Structure", false)),
-            )
+            .child(ui::segmented(
+                [("Data", true), ("Structure", false)],
+                cx.listener(|this, ix: &usize, window, cx| {
+                    if *ix == 1 {
+                        this.open_structure(window, cx);
+                    }
+                }),
+            ))
             .child(div().mx(px(4.)).w(px(1.)).h(px(20.)).bg(c(theme::LINE)))
             .child(filters)
             .child(actions)
+    }
+
+    fn open_structure(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.conn.describe().is_none() {
+            return;
+        }
+        if self.structure.is_none() {
+            let conn = self.conn.clone();
+            let table = self.table.clone();
+            let view = cx.new(|cx| StructureView::new(conn, table, cx));
+            self._subscriptions.push(cx.subscribe_in(
+                &view,
+                window,
+                |this, _, event: &StructureEvent, _, cx| match event {
+                    StructureEvent::ShowData => {
+                        this.show_structure = false;
+                        cx.notify();
+                    }
+                    StructureEvent::Changed => this.reload(cx),
+                },
+            ));
+            self.structure = Some(view);
+        }
+        self.show_structure = true;
+        cx.notify();
     }
 
     fn render_columns_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1061,20 +1065,31 @@ impl Render for TableView {
             .id("table-view")
             .key_context("TableView")
             .track_focus(&self.focus)
-            .on_action(cx.listener(|this, _: &SaveChanges, _, cx| this.save(cx)))
+            .on_action(cx.listener(|this, _: &SaveChanges, _, cx| {
+                match (&this.structure, this.show_structure) {
+                    (Some(s), true) => s.update(cx, |s, cx| s.apply(cx)),
+                    _ => this.save(cx),
+                }
+            }))
             .flex()
             .flex_col()
             .size_full()
-            .child(self.render_toolbar(cx))
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .min_h_0()
-                    .child(div().flex_1().min_w_0().h_full().child(body))
-                    .children(self.render_inspector(window, cx)),
+            .map(
+                |d| match self.structure.clone().filter(|_| self.show_structure) {
+                    Some(structure) => d.child(structure),
+                    None => d
+                        .child(self.render_toolbar(cx))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_1()
+                                .min_h_0()
+                                .child(div().flex_1().min_w_0().h_full().child(body))
+                                .children(self.render_inspector(window, cx)),
+                        )
+                        .child(self.render_status(cx)),
+                },
             )
-            .child(self.render_status(cx))
     }
 }
 
