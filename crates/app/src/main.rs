@@ -7,6 +7,7 @@ mod chart_panel;
 mod column_stats;
 mod connection_dialog;
 mod connections;
+mod dashboard_view;
 mod dropdown;
 mod export;
 mod grid;

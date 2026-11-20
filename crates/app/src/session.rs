@@ -9,14 +9,16 @@ use gpui::{
 use gpui_component::input::{InputEvent, InputState};
 use traits::Connection;
 use types::{
-    ConnectionId, DbObject, Error, Filter, KeyBytes, ObjectKind, SchemaName, TableRef, Tag,
+    ConnectionId, Dashboard, DbObject, Error, Filter, KeyBytes, ObjectKind, SchemaName, TableRef,
+    Tag,
 };
 
+use crate::dashboard_view::{AddChart, DashboardView};
 use crate::kv_view::{KeyEvent, KeyTree, KeyView, MemoryPanel, OpenKey};
-use crate::sql_editor::SqlEditor;
+use crate::sql_editor::{Pinned, SqlEditor};
 use crate::table_view::{OpenQuery, OpenTable, TableView};
 use crate::theme::{self, c};
-use crate::{runtime, ui};
+use crate::{runtime, state, ui};
 
 /// Sidebar sections, in order.
 const SECTIONS: [(ObjectKind, &str); 4] = [
@@ -31,6 +33,7 @@ pub(crate) enum Doc {
     Table(Entity<TableView>),
     Query(Entity<SqlEditor>),
     Key(Entity<KeyView>),
+    Dashboard(Entity<DashboardView>),
 }
 
 impl Doc {
@@ -39,6 +42,7 @@ impl Doc {
             Doc::Table(v) => v.clone().into(),
             Doc::Query(v) => v.clone().into(),
             Doc::Key(v) => v.clone().into(),
+            Doc::Dashboard(v) => v.clone().into(),
         }
     }
 }
@@ -58,6 +62,7 @@ pub(crate) struct Session {
     collapsed: Vec<ObjectKind>,
     filter: Entity<InputState>,
     docs: Vec<Doc>,
+    dashboards: Vec<Dashboard>,
     active: Option<usize>,
     error: Option<String>,
     keys: Option<Entity<KeyTree>>,
@@ -96,6 +101,7 @@ impl Session {
             collapsed: vec![ObjectKind::View, ObjectKind::Function, ObjectKind::Enum],
             filter,
             docs: Vec::new(),
+            dashboards: state::dashboards(cx).list(id).unwrap_or_default(),
             active: None,
             error: None,
             keys: None,
@@ -181,7 +187,7 @@ impl Session {
         let existing = filter.is_none().then(|| {
             self.docs.iter().position(|d| match d {
                 Doc::Table(v) => v.read(cx).table == table,
-                Doc::Query(_) | Doc::Key(_) => false,
+                Doc::Query(_) | Doc::Key(_) | Doc::Dashboard(_) => false,
             })
         });
         let ix = match existing.flatten() {
@@ -216,6 +222,44 @@ impl Session {
         cx.notify();
     }
 
+    fn reload_dashboards(&mut self, cx: &mut Context<Self>) {
+        self.dashboards = state::dashboards(cx).list(self.id).unwrap_or_default();
+        for doc in &self.docs {
+            if let Doc::Dashboard(v) = doc {
+                v.update(cx, |v, cx| v.reload(cx));
+            }
+        }
+        cx.notify();
+    }
+
+    /// Opens (or focuses) a dashboard tab.
+    pub(crate) fn open_dashboard(
+        &mut self,
+        dashboard: Dashboard,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let existing = self.docs.iter().position(
+            |d| matches!(d, Doc::Dashboard(v) if v.read(cx).dashboard.id == dashboard.id),
+        );
+        let ix = match existing {
+            Some(ix) => ix,
+            None => {
+                let (conn, name) = (self.conn.clone(), self.name.clone());
+                let view = cx.new(|cx| DashboardView::new(conn, dashboard, name, window, cx));
+                self._subscriptions.push(cx.subscribe_in(
+                    &view,
+                    window,
+                    |this, _, _: &AddChart, window, cx| this.open_query(String::new(), window, cx),
+                ));
+                self.docs.push(Doc::Dashboard(view));
+                self.docs.len() - 1
+            }
+        };
+        self.active = Some(ix);
+        cx.notify();
+    }
+
     /// Opens a new query tab with `sql` in the editor.
     pub(crate) fn open_query(&mut self, sql: String, window: &mut Window, cx: &mut Context<Self>) {
         self.queries += 1;
@@ -226,6 +270,10 @@ impl Session {
         };
         let (conn, id, tag) = (self.conn.clone(), self.id, self.tag);
         let editor = cx.new(|cx| SqlEditor::new(conn, id, label, tag, title, sql, window, cx));
+        self._subscriptions
+            .push(cx.subscribe(&editor, |this, _, _: &Pinned, cx| {
+                this.reload_dashboards(cx)
+            }));
         self.docs.push(Doc::Query(editor));
         self.active = Some(self.docs.len() - 1);
         cx.notify();
@@ -294,7 +342,7 @@ impl Session {
     fn selected_table(&self, cx: &Context<Self>) -> Option<TableRef> {
         match self.docs.get(self.active?)? {
             Doc::Table(v) => Some(v.read(cx).table.clone()),
-            Doc::Query(_) | Doc::Key(_) => None,
+            Doc::Query(_) | Doc::Key(_) | Doc::Dashboard(_) => None,
         }
     }
 
@@ -521,6 +569,53 @@ impl Session {
             }
         }
 
+        if !self.dashboards.is_empty() {
+            nav = nav.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .h(px(28.))
+                    .px(px(8.))
+                    .mt(px(6.))
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(c(theme::MUTED))
+                    .child(ui::icon("chevron-down", 13., theme::MUTED))
+                    .child("DASHBOARDS")
+                    .child(
+                        div()
+                            .ml_auto()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(c(theme::FAINT))
+                            .child(SharedString::from(self.dashboards.len().to_string())),
+                    ),
+            );
+            for (i, d) in self.dashboards.iter().enumerate() {
+                let dashboard = d.clone();
+                nav = nav.child(
+                    div()
+                        .id(("dashboard", i))
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .h(px(28.))
+                        .pl(px(26.))
+                        .pr(px(10.))
+                        .rounded(px(5.))
+                        .cursor_pointer()
+                        .text_size(px(13.))
+                        .text_color(c(theme::MUTED))
+                        .hover(|d| d.bg(c(theme::SELECTION)))
+                        .child(ui::icon("chart", 14., theme::FAINT))
+                        .child(SharedString::from(d.title.clone()))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_dashboard(dashboard.clone(), window, cx)
+                        })),
+                );
+            }
+        }
+
         let footer = div()
             .flex()
             .flex_none()
@@ -642,6 +737,7 @@ impl Session {
                     Doc::Table(v) => ("table", v.read(cx).table.name.to_string(), true),
                     Doc::Query(v) => ("code", v.read(cx).title.to_string(), false),
                     Doc::Key(v) => ("table", v.read(cx).key.to_display(), true),
+                    Doc::Dashboard(v) => ("chart", v.read(cx).dashboard.title.clone(), false),
                 };
                 div()
                     .id(("doc-tab", ix))

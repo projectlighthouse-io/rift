@@ -76,6 +76,11 @@ struct Summary {
     text: String,
 }
 
+/// A chart was pinned to a dashboard.
+pub(crate) struct Pinned;
+
+impl gpui::EventEmitter<Pinned> for SqlEditor {}
+
 /// One query tab.
 pub(crate) struct SqlEditor {
     conn: Arc<dyn Connection>,
@@ -497,16 +502,17 @@ impl SqlEditor {
         dashboard.cards.push(types::ChartCard {
             id: types::CardId::random(),
             title: event.title.clone(),
-            subtitle: self.label.to_string(),
+            subtitle: event.subtitle.clone(),
             chart: event.spec.clone(),
             refresh_secs: None,
             alert: None,
         });
-        if let Err(e) = store.save(&dashboard) {
-            self.messages.push(Message {
+        match store.save(&dashboard) {
+            Ok(()) => cx.emit(Pinned),
+            Err(e) => self.messages.push(Message {
                 text: format!("Pin failed: {e}"),
                 error: true,
-            });
+            }),
         }
     }
 

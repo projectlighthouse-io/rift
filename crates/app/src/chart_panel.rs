@@ -38,6 +38,7 @@ const AGGS: [(&str, AggFn); 6] = [
 /// Asks the session to pin this chart to a dashboard.
 pub(crate) struct PinChart {
     pub(crate) title: String,
+    pub(crate) subtitle: String,
     pub(crate) spec: ChartSpec,
 }
 
@@ -412,8 +413,22 @@ impl Render for ChartPanel {
                                                     request: this.request(cx),
                                                     show_points: this.show_points,
                                                 };
+                                                let subtitle =
+                                                    match (spec.request.agg, &spec.request.y) {
+                                                        (AggFn::None, Some(y)) => y.to_string(),
+                                                        (AggFn::Count, _) => "count(*)".to_owned(),
+                                                        (f, y) => format!(
+                                                            "{}({})",
+                                                            format!("{f:?}").to_lowercase(),
+                                                            y.as_ref().map_or(
+                                                                "*".to_owned(),
+                                                                ToString::to_string
+                                                            )
+                                                        ),
+                                                    };
                                                 cx.emit(PinChart {
                                                     title: spec_title.clone(),
+                                                    subtitle,
                                                     spec,
                                                 });
                                                 this.note = Some("Pinned".into());
