@@ -13,6 +13,8 @@ pub fn all() -> Vec<Box<dyn DriverFactory>> {
         mysql_driver::factory(),
         #[cfg(feature = "sqlite")]
         sqlite_driver::factory(),
+        #[cfg(feature = "redis")]
+        redis_driver::factory(),
         #[cfg(feature = "fake")]
         Box::new(testkit::FakeSqlFactory::default()),
         #[cfg(feature = "fake")]
