@@ -69,7 +69,11 @@ jobs:
           --health-cmd "wget -qO- http://127.0.0.1:8123/ping" --health-interval 2s --health-retries 60
     env:
       RIFT_REQUIRE_DOCKER: "1"
+      # GPUI debug info fills the runner's disk; tests don't need it.
+      CARGO_PROFILE_DEV_DEBUG: "0"
     steps:
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - uses: actions/checkout@v4
       - name: Install GPUI system libraries
         run: |
