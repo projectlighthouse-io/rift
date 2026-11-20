@@ -23,7 +23,7 @@ fn connection(name: &str, group: &str) -> SavedConnection {
     }
 }
 
-/// [`ConnectionStore`]: save, update, order and delete.
+/// [`ConnectionStore`]: save, update in place, creation order and delete.
 pub fn connection_store_suite(store: &dyn ConnectionStore) {
     let mut b = connection("b-conn", "Local");
     let a = connection("a-conn", "Local");
@@ -37,16 +37,13 @@ pub fn connection_store_suite(store: &dyn ConnectionStore) {
         .into_iter()
         .map(|c| c.name)
         .collect();
-    assert_eq!(
-        names,
-        ["a-conn", "b-conn", "prod"],
-        "ordered by group then name"
-    );
+    assert_eq!(names, ["b-conn", "a-conn", "prod"], "creation order");
 
     b.safe_mode = SafeMode::ReadOnly;
     store.save(&b).expect("update");
     let list = store.list().expect("list");
     assert_eq!(list.len(), 3, "update does not duplicate");
+    assert_eq!(list[0].id, b.id, "update keeps position");
     assert_eq!(
         list.iter().find(|c| c.id == b.id).expect("b").safe_mode,
         SafeMode::ReadOnly

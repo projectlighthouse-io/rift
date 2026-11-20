@@ -13,15 +13,15 @@ pub struct MemoryConnectionStore {
 
 impl ConnectionStore for MemoryConnectionStore {
     fn list(&self) -> Result<Vec<SavedConnection>, Error> {
-        let mut items = self.items.lock().expect("store poisoned").clone();
-        items.sort_by(|a, b| (&a.group, &a.name).cmp(&(&b.group, &b.name)));
-        Ok(items)
+        Ok(self.items.lock().expect("store poisoned").clone())
     }
 
     fn save(&self, connection: &SavedConnection) -> Result<(), Error> {
         let mut items = self.items.lock().expect("store poisoned");
-        items.retain(|c| c.id != connection.id);
-        items.push(connection.clone());
+        match items.iter_mut().find(|c| c.id == connection.id) {
+            Some(existing) => *existing = connection.clone(),
+            None => items.push(connection.clone()),
+        }
         Ok(())
     }
 

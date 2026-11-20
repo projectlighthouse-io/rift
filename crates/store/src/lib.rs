@@ -79,10 +79,7 @@ impl SqliteStore {
 
 impl ConnectionStore for SqliteStore {
     fn list(&self) -> Result<Vec<SavedConnection>, Error> {
-        self.bodies(
-            "SELECT body FROM connections ORDER BY grp IS NOT NULL, grp, name COLLATE NOCASE",
-            [],
-        )
+        self.bodies("SELECT body FROM connections ORDER BY rowid", [])
     }
 
     fn save(&self, connection: &SavedConnection) -> Result<(), Error> {

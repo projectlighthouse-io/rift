@@ -4,7 +4,7 @@ use types::{ConnectionId, Dashboard, DashboardId, Error, HistoryEntry, SavedConn
 
 /// Saved connections.
 pub trait ConnectionStore: Send + Sync {
-    /// All connections, ordered by group then name.
+    /// All connections, in the order they were created.
     fn list(&self) -> Result<Vec<SavedConnection>, Error>;
     /// Inserts or updates by id.
     fn save(&self, connection: &SavedConnection) -> Result<(), Error>;
