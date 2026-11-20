@@ -5,10 +5,12 @@ use std::time::Instant;
 
 use gpui::prelude::*;
 use gpui::{AnyElement, Context, Entity, FontWeight, Subscription, Window, canvas, div, px};
-use types::{SafeMode, SavedConnection, Tag};
+use types::{ObjectKind, SafeMode, SavedConnection, Tag};
 
+use crate::actions::OpenPalette;
 use crate::connection_dialog::{ConnectionDialog, DialogEvent};
 use crate::connections::{ConnectionsEvent, ConnectionsScreen};
+use crate::palette::{self, Item, Palette, PaletteEvent, Target};
 use crate::session::Session;
 use crate::theme::{self, c};
 use crate::{state, ui};
@@ -32,6 +34,9 @@ pub(crate) struct Workspace {
     active: Option<usize>,
     start: Option<Start>,
     _start_subscription: Option<Subscription>,
+    palette: Option<(Entity<Palette>, Subscription)>,
+    /// Root focus, so ⌘K works before anything else has focus.
+    focus: gpui::FocusHandle,
 }
 
 impl Workspace {
@@ -41,9 +46,119 @@ impl Workspace {
             active: None,
             start: None,
             _start_subscription: None,
+            palette: None,
+            focus: cx.focus_handle(),
         };
+        window.focus(&workspace.focus, cx);
         workspace.show_list(window, cx);
         workspace
+    }
+
+    /// Everything the palette searches, gathered when it opens.
+    fn palette_items(&self, cx: &gpui::App) -> Vec<Item> {
+        let mut items = Vec::new();
+        let mut open = Vec::new();
+        for (i, session) in self.sessions.iter().enumerate() {
+            let s = session.read(cx);
+            open.push(s.id());
+            let openable = |k: ObjectKind| {
+                matches!(
+                    k,
+                    ObjectKind::Table | ObjectKind::View | ObjectKind::MaterializedView
+                )
+            };
+            for o in s.objects().iter().filter(|o| openable(o.kind)) {
+                items.push(palette::object_item(i, &s.name, o.kind, o.table.clone()));
+            }
+            for d in s.dashboards() {
+                items.push(Item::new(
+                    "chart",
+                    d.title.clone(),
+                    format!("{} · dashboard", s.name),
+                    false,
+                    Target::Dashboard {
+                        session: i,
+                        dashboard: d.clone(),
+                    },
+                ));
+            }
+        }
+        for entry in state::history(cx).recent(None, 200).unwrap_or_default() {
+            let Some(session) = open.iter().position(|id| *id == entry.connection) else {
+                continue;
+            };
+            items.push(Item::new(
+                "code",
+                palette::history_label(&entry.sql),
+                format!("history · {}", palette::day_label(entry.ran_at)),
+                false,
+                Target::Query {
+                    session,
+                    sql: entry.sql,
+                },
+            ));
+        }
+        for saved in state::manager(cx).list().unwrap_or_default() {
+            if !open.contains(&saved.id) {
+                items.push(Item::new(
+                    "database",
+                    format!("Connect to {}", saved.name),
+                    "connection".into(),
+                    false,
+                    Target::Connect(saved),
+                ));
+            }
+        }
+        items
+    }
+
+    fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let items = self.palette_items(cx);
+        let palette = cx.new(|cx| Palette::new(items, window, cx));
+        let subscription = cx.subscribe_in(
+            &palette,
+            window,
+            |this, _, event: &PaletteEvent, window, cx| {
+                this.palette = None;
+                if let PaletteEvent::Open { target, new_tab } = event {
+                    this.open_target((**target).clone(), *new_tab, window, cx);
+                }
+                cx.notify();
+            },
+        );
+        self.palette = Some((palette, subscription));
+        cx.notify();
+    }
+
+    fn open_target(
+        &mut self,
+        target: Target,
+        new_tab: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let session_ix = match &target {
+            Target::Table { session, .. }
+            | Target::Dashboard { session, .. }
+            | Target::Query { session, .. } => *session,
+            Target::Connect(saved) => {
+                self.connect(saved.clone(), window, cx);
+                return;
+            }
+        };
+        let Some(session) = self.sessions.get(session_ix).cloned() else {
+            return;
+        };
+        self.active = Some(session_ix);
+        self.start = None;
+        self._start_subscription = None;
+        session.update(cx, |s, cx| match target {
+            Target::Table { table, .. } if new_tab => s.open_table_in_new_tab(table, window, cx),
+            Target::Table { table, .. } => s.open_table(table, None, window, cx),
+            Target::Dashboard { dashboard, .. } => s.open_dashboard(dashboard, window, cx),
+            Target::Query { sql, .. } => s.open_query(sql, window, cx),
+            Target::Connect(_) => {}
+        });
     }
 
     /// Shows the connections list.
@@ -122,6 +237,8 @@ impl Workspace {
             let Ok(result) = rx.await else { return };
             let _ = this.update_in(cx, |this, window, cx| match result {
                 Ok(conn) => {
+                    // The connections search had focus and is going away; keep ⌘K working.
+                    window.focus(&this.focus, cx);
                     let read_only = saved.safe_mode == SafeMode::ReadOnly;
                     let tag = saved.tag.unwrap_or(Tag::Green);
                     let session = cx.new(|cx| {
@@ -247,7 +364,10 @@ impl Workspace {
                             }),
                         ),
                     )
-                    .on_click(cx.listener(move |this, _, _, cx| {
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        if this.start.is_some() {
+                            window.focus(&this.focus, cx);
+                        }
                         this.active = Some(ix);
                         this.start = None;
                         this._start_subscription = None;
@@ -287,6 +407,7 @@ impl Workspace {
                     .text_color(c(theme::FAINT))
                     .cursor_pointer()
                     .child(ui::icon("search", 14., theme::FAINT))
+                    .on_click(cx.listener(|this, _, window, cx| this.open_palette(window, cx)))
                     .child(div().flex_1().child("Open anything…"))
                     .child(ui::kbd("⌘K", cx).text_color(c(theme::MUTED))),
             )
@@ -337,7 +458,29 @@ impl Render for Workspace {
                 .child(ui::dot_grid())
                 .into_any_element(),
         };
+        let overlay = self.palette.as_ref().map(|(palette, _)| {
+            let mut veil = theme::hsla(theme::BG);
+            veil.a = 0.82;
+            div()
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                .bg(veil)
+                .child(ui::dot_grid())
+                .flex()
+                .justify_center()
+                .items_start()
+                .pt(px(120.))
+                .child(palette.clone())
+        });
         div()
+            .key_context("Workspace")
+            .track_focus(&self.focus)
+            .on_action(
+                cx.listener(|this, _: &OpenPalette, window, cx| this.open_palette(window, cx)),
+            )
+            .relative()
             .flex()
             .flex_col()
             .size_full()
@@ -349,6 +492,7 @@ impl Render for Workspace {
                 d.child(self.render_top_bar(cx))
             })
             .child(div().flex_1().min_h_0().child(body))
+            .children(overlay)
             .child(
                 canvas(
                     move |_, _, _| {

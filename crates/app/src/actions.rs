@@ -11,6 +11,8 @@ actions!(
         EditConnection,
         /// Save pending changes.
         SaveChanges,
+        /// Open the command palette.
+        OpenPalette,
     ]
 );
 
@@ -31,5 +33,6 @@ pub(crate) fn bind(cx: &mut App) {
         KeyBinding::new(cmd!("n"), NewConnection, Some("Connections")),
         KeyBinding::new(cmd!("e"), EditConnection, Some("Connections")),
         KeyBinding::new(cmd!("s"), SaveChanges, Some("TableView")),
+        KeyBinding::new(cmd!("k"), OpenPalette, None),
     ]);
 }

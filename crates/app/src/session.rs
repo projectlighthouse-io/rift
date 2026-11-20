@@ -213,7 +213,29 @@ impl Session {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let existing = filter.is_none().then(|| {
+        let reuse = filter.is_none();
+        self.open_table_with(table, filter, reuse, window, cx);
+    }
+
+    /// Opens a table in a new tab even if one is open.
+    pub(crate) fn open_table_in_new_tab(
+        &mut self,
+        table: TableRef,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_table_with(table, None, false, window, cx);
+    }
+
+    fn open_table_with(
+        &mut self,
+        table: TableRef,
+        filter: Option<Filter>,
+        reuse: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let existing = reuse.then(|| {
             self.docs.iter().position(|d| match d {
                 Doc::Table(v) => v.read(cx).table == table,
                 Doc::Query(_) | Doc::Key(_) | Doc::Dashboard(_) | Doc::Range(_) => false,
@@ -259,6 +281,19 @@ impl Session {
             }
         }
         cx.notify();
+    }
+
+    /// Tables and views from the sidebar, for the command palette.
+    pub(crate) fn objects(&self) -> &[DbObject] {
+        &self.objects
+    }
+
+    pub(crate) fn dashboards(&self) -> &[Dashboard] {
+        &self.dashboards
+    }
+
+    pub(crate) fn id(&self) -> ConnectionId {
+        self.id
     }
 
     /// Opens (or focuses) a directory's range document.
