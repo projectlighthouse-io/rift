@@ -35,12 +35,7 @@ impl PgConnection {
 }
 
 fn type_name(info: &impl TypeInfo) -> String {
-    let name = info.name();
-    if Dialect::Postgres == Dialect::Postgres {
-        name.to_lowercase()
-    } else {
-        name.to_owned()
-    }
+    info.name().to_lowercase()
 }
 
 impl Aggregate for PgConnection {

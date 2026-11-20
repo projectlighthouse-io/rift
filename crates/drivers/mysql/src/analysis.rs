@@ -35,12 +35,7 @@ impl MySqlConnection {
 }
 
 fn type_name(info: &impl TypeInfo) -> String {
-    let name = info.name();
-    if Dialect::MySql == Dialect::Postgres {
-        name.to_lowercase()
-    } else {
-        name.to_owned()
-    }
+    info.name().to_owned()
 }
 
 impl Aggregate for MySqlConnection {
