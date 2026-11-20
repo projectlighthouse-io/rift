@@ -7,7 +7,7 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use sqlx::PgPool;
 use sqlx::postgres::PgConnectOptions;
-use traits::{Browse, Connection, Describe, Explain, Query, Spawner};
+use traits::{Browse, Connection, Describe, EditRows, Explain, Query, Spawner, Transactions};
 use types::{ConnectionInfo, Error};
 
 use crate::error;
@@ -59,6 +59,14 @@ impl Connection for PgConnection {
     }
 
     fn explain(&self) -> Option<&dyn Explain> {
+        Some(self)
+    }
+
+    fn edit_rows(&self) -> Option<&dyn EditRows> {
+        Some(self)
+    }
+
+    fn transactions(&self) -> Option<&dyn Transactions> {
         Some(self)
     }
 }

@@ -6,6 +6,7 @@
 
 mod catalog;
 mod connection;
+mod edit;
 mod error;
 mod factory;
 mod query;
