@@ -129,13 +129,14 @@ impl Workspace {
                             saved.name.clone().into(),
                             tag,
                             read_only,
+                            saved.id,
                             conn,
                             window,
                             cx,
                         );
-                        // Dev check: `RIFT_DEV_QUERY` opens a result tab (100k-row scroll test).
+                        // Dev check: `RIFT_DEV_QUERY` opens a query tab with that SQL.
                         if let Ok(sql) = std::env::var("RIFT_DEV_QUERY") {
-                            s.open_query(sql, cx);
+                            s.open_query(sql, window, cx);
                         }
                         s
                     });
@@ -288,7 +289,15 @@ impl Workspace {
             .child(
                 ui::secondary_button("sql", "SQL")
                     .child(ui::icon("terminal", 14., theme::TEXT))
-                    .flex_row_reverse(),
+                    .flex_row_reverse()
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        let session = this.active.and_then(|ix| this.sessions.get(ix)).cloned();
+                        if let Some(session) = session {
+                            this.start = None;
+                            this._start_subscription = None;
+                            session.update(cx, |s, cx| s.open_query(String::new(), window, cx));
+                        }
+                    })),
             );
         div()
             .flex()

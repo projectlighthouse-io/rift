@@ -11,6 +11,7 @@ use traits::ConnectDeps;
 /// Services shared by every window.
 pub(crate) struct AppState {
     pub(crate) manager: Arc<ConnectionManager>,
+    pub(crate) store: Arc<SqliteStore>,
 }
 
 impl Global for AppState {}
@@ -70,7 +71,7 @@ pub(crate) fn init(cx: &mut App) -> anyhow::Result<()> {
     let store = Arc::new(SqliteStore::open(&data_dir().join("rift.db"))?);
     let manager = ConnectionManager::new(
         registry::all(),
-        store,
+        store.clone(),
         if std::env::var_os("RIFT_DEV_INSECURE_SECRETS").is_some() {
             tracing::warn!("RIFT_DEV_INSECURE_SECRETS: passwords are stored in plaintext");
             Arc::new(FileSecretStore {
@@ -86,6 +87,7 @@ pub(crate) fn init(cx: &mut App) -> anyhow::Result<()> {
     );
     cx.set_global(AppState {
         manager: Arc::new(manager),
+        store,
     });
     Ok(())
 }
@@ -93,4 +95,9 @@ pub(crate) fn init(cx: &mut App) -> anyhow::Result<()> {
 /// The connection manager.
 pub(crate) fn manager(cx: &App) -> Arc<ConnectionManager> {
     cx.global::<AppState>().manager.clone()
+}
+
+/// Query history.
+pub(crate) fn history(cx: &App) -> Arc<dyn traits::HistoryStore> {
+    cx.global::<AppState>().store.clone()
 }

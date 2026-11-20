@@ -71,6 +71,24 @@ pub(crate) fn primary_button(
         .child(label.into())
 }
 
+/// Black primary button with a leading icon (`▶ Run current`).
+pub(crate) fn primary_icon_button(
+    id: impl Into<ElementId>,
+    icon_name: &str,
+    label: impl Into<SharedString>,
+) -> Stateful<Div> {
+    button_base(id)
+        .h(px(28.))
+        .px(px(12.))
+        .bg(c(theme::PRIMARY))
+        .text_color(c(theme::BG))
+        .text_size(px(12.5))
+        .font_weight(FontWeight::MEDIUM)
+        .hover(|s| s.opacity(0.9))
+        .child(icon(icon_name, 12., theme::BG))
+        .child(label.into())
+}
+
 /// Borderless text button (`Discard`, `Cancel`).
 pub(crate) fn ghost_button(
     id: impl Into<ElementId>,

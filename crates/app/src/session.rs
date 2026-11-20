@@ -8,9 +8,9 @@ use gpui::{
 };
 use gpui_component::input::{InputEvent, InputState};
 use traits::Connection;
-use types::{DbObject, Error, Filter, ObjectKind, SchemaName, TableRef, Tag};
+use types::{ConnectionId, DbObject, Error, Filter, ObjectKind, SchemaName, TableRef, Tag};
 
-use crate::result_view::ResultView;
+use crate::sql_editor::SqlEditor;
 use crate::table_view::{OpenTable, TableView};
 use crate::theme::{self, c};
 use crate::{runtime, ui};
@@ -26,14 +26,14 @@ const SECTIONS: [(ObjectKind, &str); 4] = [
 /// An open document tab.
 pub(crate) enum Doc {
     Table(Entity<TableView>),
-    Result(Entity<ResultView>),
+    Query(Entity<SqlEditor>),
 }
 
 impl Doc {
     fn view(&self) -> AnyView {
         match self {
             Doc::Table(v) => v.clone().into(),
-            Doc::Result(v) => v.clone().into(),
+            Doc::Query(v) => v.clone().into(),
         }
     }
 }
@@ -44,6 +44,8 @@ pub(crate) struct Session {
     pub(crate) tag: Tag,
     pub(crate) read_only: bool,
     pub(crate) conn: Arc<dyn Connection>,
+    id: ConnectionId,
+    queries: usize,
     schema: Option<SchemaName>,
     objects: Vec<DbObject>,
     collapsed: Vec<ObjectKind>,
@@ -60,6 +62,7 @@ impl Session {
         name: SharedString,
         tag: Tag,
         read_only: bool,
+        id: ConnectionId,
         conn: Arc<dyn Connection>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -75,6 +78,8 @@ impl Session {
             tag,
             read_only,
             conn,
+            id,
+            queries: 0,
             schema: None,
             objects: Vec::new(),
             collapsed: vec![ObjectKind::View, ObjectKind::Function, ObjectKind::Enum],
@@ -144,7 +149,7 @@ impl Session {
         let existing = filter.is_none().then(|| {
             self.docs.iter().position(|d| match d {
                 Doc::Table(v) => v.read(cx).table == table,
-                Doc::Result(_) => false,
+                Doc::Query(_) => false,
             })
         });
         let ix = match existing.flatten() {
@@ -172,21 +177,25 @@ impl Session {
         cx.notify();
     }
 
-    /// Opens a result tab running `sql`.
-    pub(crate) fn open_query(&mut self, sql: String, cx: &mut Context<Self>) {
-        let conn = self.conn.clone();
-        let title: SharedString = format!("Query {}", self.docs.len() + 1).into();
-        self.docs.push(Doc::Result(
-            cx.new(|cx| ResultView::new(conn, title, sql, cx)),
-        ));
+    /// Opens a new query tab with `sql` in the editor.
+    pub(crate) fn open_query(&mut self, sql: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.queries += 1;
+        let title: SharedString = format!("Query {}", self.queries).into();
+        let label: SharedString = match &self.conn.info().database {
+            Some(db) => format!("{} · {db}", self.name).into(),
+            None => self.name.clone(),
+        };
+        let (conn, id, tag) = (self.conn.clone(), self.id, self.tag);
+        let editor = cx.new(|cx| SqlEditor::new(conn, id, label, tag, title, sql, window, cx));
+        self.docs.push(Doc::Query(editor));
         self.active = Some(self.docs.len() - 1);
         cx.notify();
     }
 
     fn close_doc(&mut self, ix: usize, cx: &mut Context<Self>) {
         if ix < self.docs.len() {
-            if let Doc::Result(v) = &self.docs[ix] {
-                v.read(cx).cancel();
+            if let Doc::Query(v) = &self.docs[ix] {
+                v.update(cx, |v, cx| v.cancel(cx));
             }
             self.docs.remove(ix);
             self.active = match self.active {
@@ -201,7 +210,7 @@ impl Session {
     fn selected_table(&self, cx: &Context<Self>) -> Option<TableRef> {
         match self.docs.get(self.active?)? {
             Doc::Table(v) => Some(v.read(cx).table.clone()),
-            Doc::Result(_) => None,
+            Doc::Query(_) => None,
         }
     }
 
@@ -455,7 +464,7 @@ impl Session {
                 let active = self.active == Some(ix);
                 let (icon, label, is_table) = match doc {
                     Doc::Table(v) => ("table", v.read(cx).table.name.to_string(), true),
-                    Doc::Result(v) => ("code", v.read(cx).title.to_string(), false),
+                    Doc::Query(v) => ("code", v.read(cx).title.to_string(), false),
                 };
                 div()
                     .id(("doc-tab", ix))
@@ -506,7 +515,9 @@ impl Session {
                         cx.notify();
                     }))
             }))
-            .child(ui::icon_button("new-query", "plus", 28., 15.))
+            .child(ui::icon_button("new-query", "plus", 28., 15.).on_click(
+                cx.listener(|this, _, window, cx| this.open_query(String::new(), window, cx)),
+            ))
     }
 }
 

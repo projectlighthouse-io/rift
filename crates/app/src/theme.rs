@@ -83,6 +83,10 @@ pub(crate) fn init(cx: &mut App) {
     .find(|name| installed.iter().any(|f| f == name))
     .unwrap_or("Menlo");
     cx.set_global(Fonts { mono: mono.into() });
+    // The SQL editor (gpui-component) reads its font from the component theme.
+    let component = gpui_component::Theme::global_mut(cx);
+    component.mono_font_family = mono.into();
+    component.mono_font_size = gpui::px(13.);
 }
 
 /// The monospace family.
