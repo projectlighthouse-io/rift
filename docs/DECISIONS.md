@@ -39,3 +39,25 @@ Format: date, decision, reason.
   suites restore it after mutating, so all suites share one table.
 - **`registry` feature `fake`** adds `testkit`'s `FakeSqlFactory` and `FakeKvFactory`; CI runs
   `cargo test -p registry --features fake`.
+
+## 2026-11-20 — M2
+
+- **Rust 1.98 pinned** in `rust-toolchain.toml`: `gpui-pre-macos` 0.3.12 uses
+  `Option::map_or_default`, stable only from 1.97/1.98.
+- **GPUI:** `gpui-component =0.10.0`, which requires `gpui = { package = "gpui-pre",
+  version = "=0.3.12" }` and `gpui_platform = { package = "gpui-pre-platform",
+  version = "=0.3.12" }` (`Application::with_platform(gpui_platform::current_platform(false))`).
+  `runtime_shaders` avoids needing the Metal compiler from full Xcode.
+- **sqlx 0.9 for Postgres (and later MySQL) instead of tokio-postgres / mysql_async**
+  (owner's call). sqlx stays private to the driver crates; the app only sees the traits.
+  - Results use `raw_sql` (simple protocol, text format), so every type is readable; unknown
+    types become `Value::Unknown` with the server's text.
+  - Result columns come from `Executor::prepare` before running the statement.
+  - sqlx has no cancel API: the driver records `pg_backend_pid()` and runs
+    `pg_cancel_backend(pid)` from a side connection when the token fires.
+  - SQLite keeps `rusqlite` so long statements can be interrupted.
+- **Values are inlined as SQL literals** by `dialect` (filters, edits) rather than bound as
+  parameters: untyped string literals coerce to enums, numerics and timestamps in every engine,
+  and the generated SQL is what the status bar and snapshots show. Escaping is per dialect.
+- **Driver integration tests skip when Docker is unreachable,** unless `RIFT_REQUIRE_DOCKER=1`.
+  Ports come from `RIFT_PG_PORT` etc.

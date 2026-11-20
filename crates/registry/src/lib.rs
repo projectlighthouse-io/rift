@@ -7,6 +7,8 @@ use traits::DriverFactory;
 #[must_use]
 pub fn all() -> Vec<Box<dyn DriverFactory>> {
     vec![
+        #[cfg(feature = "postgres")]
+        postgres_driver::factory(),
         #[cfg(feature = "fake")]
         Box::new(testkit::FakeSqlFactory::default()),
         #[cfg(feature = "fake")]
@@ -22,6 +24,6 @@ mod tests {
             .iter()
             .map(|f| f.info().id.to_string())
             .collect();
-        assert_eq!(ids, ["fake-sql", "fake-kv"]);
+        assert!(ids.ends_with(&["fake-sql".to_owned(), "fake-kv".to_owned()]));
     }
 }
