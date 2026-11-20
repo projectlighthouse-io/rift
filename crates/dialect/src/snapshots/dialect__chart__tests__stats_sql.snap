@@ -1,0 +1,6 @@
+---
+source: crates/dialect/src/chart.rs
+expression: "format!(\"{a}\\n{b}\")"
+---
+SELECT count(*), count(status), count(DISTINCT status) FROM public.orders
+SELECT status AS v, count(*) AS n FROM public.orders WHERE status IS NOT NULL GROUP BY status ORDER BY n DESC LIMIT 6

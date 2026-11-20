@@ -1,0 +1,5 @@
+---
+source: crates/dialect/src/chart.rs
+expression: "aggregate_sql(Dialect::Postgres, &r).expect(\"sql\")"
+---
+SELECT status AS x, sum(total) AS y FROM (SELECT * FROM orders) AS src WHERE status IS NOT NULL GROUP BY 1 ORDER BY 1 LIMIT 10001

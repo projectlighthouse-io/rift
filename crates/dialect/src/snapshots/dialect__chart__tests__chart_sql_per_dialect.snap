@@ -1,0 +1,8 @@
+---
+source: crates/dialect/src/chart.rs
+expression: "all.join(\"\\n\")"
+---
+SELECT date_trunc('day', ts) AS x, event AS s, count(*) AS y FROM analytics.events WHERE ts IS NOT NULL GROUP BY 1, 2 ORDER BY 1 LIMIT 10001
+SELECT DATE(ts) AS x, event AS s, count(*) AS y FROM analytics.events WHERE ts IS NOT NULL GROUP BY 1, 2 ORDER BY 1 LIMIT 10001
+SELECT strftime('%Y-%m-%d', ts) AS x, event AS s, count(*) AS y FROM analytics.events WHERE ts IS NOT NULL GROUP BY 1, 2 ORDER BY 1 LIMIT 10001
+SELECT toStartOfDay(ts) AS x, event AS s, count(*) AS y FROM analytics.events WHERE ts IS NOT NULL GROUP BY 1, 2 ORDER BY 1 LIMIT 10001
