@@ -51,10 +51,17 @@ pub(crate) fn address(connection: &SavedConnection, cx: &gpui::App) -> String {
         };
     }
     let manager = state::manager(cx);
-    manager
-        .driver(connection.driver.as_str())
-        .and_then(|d| d.fields.iter().find(|f| f.kind == FieldKind::File))
-        .and_then(|f| value(f.key.as_str()))
+    let Some(driver) = manager.driver(connection.driver.as_str()) else {
+        return String::new();
+    };
+    // A file path first, else the first field that has a value (e.g. a cluster string).
+    let file = driver.fields.iter().filter(|f| f.kind == FieldKind::File);
+    let rest = driver
+        .fields
+        .iter()
+        .filter(|f| f.kind != FieldKind::Password);
+    file.chain(rest)
+        .find_map(|f| value(f.key.as_str()))
         .cloned()
         .unwrap_or_default()
 }
