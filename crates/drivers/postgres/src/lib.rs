@@ -4,6 +4,7 @@
 //! arrives as readable text. Queries are cancelled with `pg_cancel_backend` from a side
 //! connection.
 
+mod analysis;
 mod catalog;
 mod connection;
 mod edit;

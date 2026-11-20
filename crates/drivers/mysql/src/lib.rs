@@ -4,6 +4,7 @@
 //! side connection. Structure changes cannot be rolled back on MySQL, which the driver reports
 //! through `EditSchema::transactional_ddl`.
 
+mod analysis;
 mod catalog;
 mod connection;
 mod edit;

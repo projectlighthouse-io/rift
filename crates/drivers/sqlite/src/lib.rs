@@ -3,6 +3,7 @@
 //! Every call opens the database file on a blocking thread, so long reads never hold a lock
 //! the UI needs. Queries are cancelled with `sqlite3_interrupt`.
 
+mod analysis;
 mod catalog;
 mod connection;
 mod edit;

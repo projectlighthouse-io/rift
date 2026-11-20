@@ -8,7 +8,8 @@ use futures::future::BoxFuture;
 use sqlx::PgPool;
 use sqlx::postgres::PgConnectOptions;
 use traits::{
-    Browse, Connection, Describe, EditRows, EditSchema, Explain, Query, Spawner, Transactions,
+    Aggregate, Browse, ColumnStats, Connection, Describe, EditRows, EditSchema, Explain, Query,
+    Spawner, Transactions,
 };
 use types::{ConnectionInfo, Error};
 
@@ -61,6 +62,14 @@ impl Connection for PgConnection {
     }
 
     fn explain(&self) -> Option<&dyn Explain> {
+        Some(self)
+    }
+
+    fn aggregate(&self) -> Option<&dyn Aggregate> {
+        Some(self)
+    }
+
+    fn column_stats(&self) -> Option<&dyn ColumnStats> {
         Some(self)
     }
 
