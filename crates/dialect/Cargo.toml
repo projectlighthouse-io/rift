@@ -1,0 +1,14 @@
+[package]
+name = "dialect"
+description = "SQL quoting, edit-to-SQL, chart query builders and safe-mode checks."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+types = { workspace = true }

@@ -1,0 +1,55 @@
+[workspace]
+resolver = "3"
+members = [
+  "crates/types",
+  "crates/traits",
+  "crates/dialect",
+  "crates/registry",
+  "crates/conn",
+  "crates/store",
+  "crates/app",
+  "crates/testkit",
+  "crates/drivers/*",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+types = { path = "crates/types" }
+traits = { path = "crates/traits" }
+dialect = { path = "crates/dialect" }
+registry = { path = "crates/registry" }
+conn = { path = "crates/conn" }
+store = { path = "crates/store" }
+testkit = { path = "crates/testkit" }
+postgres-driver = { path = "crates/drivers/postgres" }
+mysql-driver = { path = "crates/drivers/mysql" }
+sqlite-driver = { path = "crates/drivers/sqlite" }
+clickhouse-driver = { path = "crates/drivers/clickhouse" }
+redis-driver = { path = "crates/drivers/redis" }
+foundationdb-driver = { path = "crates/drivers/foundationdb" }
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+borrowed_box = "deny"
+ptr_arg = "deny"
+should_implement_trait = "deny"
+new_without_default = "deny"
+len_without_is_empty = "deny"
+exhaustive_enums = "deny"
+wrong_self_convention = "deny"
+unwrap_used = "deny"
+wildcard_imports = "deny"
+enum_glob_use = "deny"
+fn_params_excessive_bools = "deny"
+string_add = "deny"
+needless_for_each = "deny"
+must_use_candidate = "warn"

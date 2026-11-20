@@ -1,0 +1,16 @@
+[package]
+name = "redis-driver"
+description = "Rift driver for Redis."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+types = { workspace = true }
+traits = { workspace = true }
+dialect = { workspace = true }

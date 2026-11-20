@@ -1,0 +1,30 @@
+[package]
+name = "registry"
+description = "The only crate that names concrete drivers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+types = { workspace = true }
+traits = { workspace = true }
+postgres-driver = { workspace = true, optional = true }
+mysql-driver = { workspace = true, optional = true }
+sqlite-driver = { workspace = true, optional = true }
+clickhouse-driver = { workspace = true, optional = true }
+redis-driver = { workspace = true, optional = true }
+foundationdb-driver = { workspace = true, optional = true }
+
+[features]
+default = ["postgres", "mysql", "sqlite", "clickhouse", "redis", "foundationdb"]
+postgres = ["dep:postgres-driver"]
+mysql = ["dep:mysql-driver"]
+sqlite = ["dep:sqlite-driver"]
+clickhouse = ["dep:clickhouse-driver"]
+redis = ["dep:redis-driver"]
+foundationdb = ["dep:foundationdb-driver"]
