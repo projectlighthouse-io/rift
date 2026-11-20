@@ -13,3 +13,9 @@ workspace = true
 [dependencies]
 types = { workspace = true }
 traits = { workspace = true }
+futures = { workspace = true }
+keyring = { workspace = true }
+
+[dev-dependencies]
+testkit = { workspace = true }
+futures = { workspace = true }
