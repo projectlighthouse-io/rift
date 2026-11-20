@@ -12,3 +12,5 @@ workspace = true
 
 [dependencies]
 types = { workspace = true }
+futures = { workspace = true }
+tokio-util = { workspace = true }
