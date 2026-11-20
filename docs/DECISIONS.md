@@ -110,3 +110,16 @@ Format: date, decision, reason.
 - **Dev switch `RIFT_DEV_INSECURE_SECRETS=1`** keeps passwords in a plaintext JSON file in the
   data dir. Unsigned rebuilds otherwise trigger a keychain password prompt on every launch,
   which blocks automated UI checks. Never the default.
+
+## 2026-11-20 — M5
+
+- **Identifiers are quoted only when needed** (not `[a-z_][a-z0-9_]*`, or a keyword), so DDL and
+  edit SQL read like the design (`ALTER TABLE public.orders ADD COLUMN gift_message text`).
+- **Structure changes are staged** and applied together with ⌘S; on Postgres they run in one
+  transaction. Truncate is immediate after a second click ("Delete all rows?").
+- **Drops are per-row trash buttons**; staged drops show red and struck through, staged adds
+  green with a `NEW` badge.
+- **"drag to reorder" is not shown:** Postgres and MySQL cannot reorder columns without
+  rebuilding the table, so the hint would promise something Rift does not do.
+- **sqlx statement cache disabled** for Postgres: after `ALTER TABLE`, cached `SELECT *`
+  metadata returned stale columns (caught by the EditSchema conformance suite).
