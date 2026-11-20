@@ -5,7 +5,7 @@
 use gpui::prelude::*;
 use gpui::{
     Context, Entity, EventEmitter, FontWeight, KeyDownEvent, MouseButton, SharedString,
-    Subscription, UniformListScrollHandle, Window, div, px, uniform_list,
+    Subscription, UniformListScrollHandle, Window, anchored, deferred, div, px, uniform_list,
 };
 use gpui_component::input::{InputEvent, InputState};
 use types::{Column, Row, Value};
@@ -58,6 +58,8 @@ impl GridRow {
 pub(crate) enum GridEvent {
     /// A cell was clicked.
     Selected { row: usize },
+    /// A column header was clicked.
+    Header { col: usize },
     /// Inline edit committed with this text.
     Edited {
         row: usize,
@@ -84,6 +86,8 @@ pub(crate) struct Grid {
     focused_cell: Option<(usize, usize)>,
     editable: bool,
     editing: Option<Editing>,
+    /// A view anchored under a column header (column stats).
+    popover: Option<(usize, gpui::AnyView)>,
     scroll: UniformListScrollHandle,
     /// Dev check (`RIFT_DEV_AUTOSCROLL=1`): scrolls through every row, one step per frame.
     autoscroll: Option<usize>,
@@ -103,9 +107,15 @@ impl Grid {
             focused_cell: None,
             editable: false,
             editing: None,
+            popover: None,
             scroll: UniformListScrollHandle::new(),
             autoscroll: std::env::var_os("RIFT_DEV_AUTOSCROLL").map(|_| 0),
         }
+    }
+
+    /// Shows `view` under column `col`'s header, or nothing.
+    pub(crate) fn set_popover(&mut self, popover: Option<(usize, gpui::AnyView)>) {
+        self.popover = popover;
     }
 
     /// Allows double-click editing.
@@ -270,7 +280,7 @@ impl Grid {
         }
     }
 
-    fn render_header(&self, mono: SharedString) -> impl IntoElement {
+    fn render_header(&self, mono: SharedString, cx: &mut Context<Self>) -> impl IntoElement {
         let cell = |w: f32| {
             div()
                 .flex()
@@ -290,32 +300,63 @@ impl Grid {
             .flex()
             .flex_none()
             .child(cell(ROW_NUMBER_WIDTH))
-            .children(self.columns.iter().zip(&self.widths).map(|(col, w)| {
-                let marker = if col.primary_key {
-                    Some("key")
-                } else if col.references.is_some() {
-                    Some("link")
-                } else {
-                    None
-                };
-                cell(*w)
-                    .gap(px(4.))
-                    .font_family(mono.clone())
-                    .children(marker.map(|m| ui::icon(m, 12., theme::FAINT)))
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(c(theme::TEXT))
-                            .child(SharedString::from(col.name.to_string())),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.))
-                            .text_color(c(theme::FAINT))
-                            .child(SharedString::from(col.type_name.clone())),
-                    )
-            }))
+            .children(
+                self.columns
+                    .iter()
+                    .zip(&self.widths)
+                    .enumerate()
+                    .map(|(i, (col, w))| {
+                        let open = self
+                            .popover
+                            .as_ref()
+                            .filter(|(c, _)| *c == i)
+                            .map(|(_, v)| v.clone());
+                        let marker = if col.primary_key {
+                            Some("key")
+                        } else if col.references.is_some() {
+                            Some("link")
+                        } else {
+                            None
+                        };
+                        cell(*w)
+                            .id(("grid-header", i))
+                            .cursor_pointer()
+                            .on_click(
+                                cx.listener(move |_, _, _, cx| {
+                                    cx.emit(GridEvent::Header { col: i })
+                                }),
+                            )
+                            .gap(px(4.))
+                            .font_family(mono.clone())
+                            .children(marker.map(|m| ui::icon(m, 12., theme::FAINT)))
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(c(if open.is_some() {
+                                        theme::ACCENT_TEXT
+                                    } else {
+                                        theme::TEXT
+                                    }))
+                                    .when(open.is_some(), |d| d.underline())
+                                    .child(SharedString::from(col.name.to_string())),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(c(theme::FAINT))
+                                    .child(SharedString::from(col.type_name.clone())),
+                            )
+                            .when_some(open, |d, view| {
+                                d.relative().child(
+                                    div().absolute().left_0().top(px(HEADER_HEIGHT + 4.)).child(
+                                        deferred(anchored().snap_to_window().child(view))
+                                            .with_priority(1),
+                                    ),
+                                )
+                            })
+                    }),
+            )
     }
 
     fn render_row(&self, ix: usize, mono: SharedString, cx: &mut Context<Self>) -> gpui::Div {
@@ -498,7 +539,7 @@ impl Render for Grid {
                     .flex_col()
                     .w(px(width))
                     .h_full()
-                    .child(self.render_header(mono))
+                    .child(self.render_header(mono, cx))
                     .child(
                         uniform_list(
                             "grid-rows",

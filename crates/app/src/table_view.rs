@@ -18,6 +18,7 @@ use types::{
 };
 
 use crate::actions::SaveChanges;
+use crate::column_stats::{ColumnStatsView, StatsAction};
 use crate::dropdown::Dropdown;
 use crate::grid::{Grid, GridEvent, GridRow, RowMark};
 use crate::structure_view::{StructureEvent, StructureView};
@@ -42,6 +43,9 @@ const OPS: [(&str, FilterOp); 9] = [
 ];
 
 /// Asks the session to open another table, filtered (FK links).
+/// Asks the session to open a query tab with this SQL.
+pub(crate) struct OpenQuery(pub(crate) String);
+
 pub(crate) struct OpenTable {
     pub(crate) table: TableRef,
     pub(crate) filter: Filter,
@@ -104,11 +108,13 @@ pub(crate) struct TableView {
     columns_menu: bool,
     structure: Option<Entity<StructureView>>,
     show_structure: bool,
+    stats: Option<Entity<ColumnStatsView>>,
     _tasks: Vec<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl EventEmitter<OpenTable> for TableView {}
+impl EventEmitter<OpenQuery> for TableView {}
 
 impl TableView {
     pub(crate) fn new(
@@ -124,6 +130,7 @@ impl TableView {
             window,
             |this, _, event: &GridEvent, window, cx| match event {
                 GridEvent::Selected { row } => this.select(*row, window, cx),
+                GridEvent::Header { col } => this.toggle_stats(*col, window, cx),
                 GridEvent::Edited { row, col, text } => {
                     let col = this.visible_columns()[*col];
                     this.set_cell(*row, col, parse_cell(text), cx);
@@ -154,6 +161,7 @@ impl TableView {
             columns_menu: false,
             structure: None,
             show_structure: false,
+            stats: None,
             _tasks: Vec::new(),
             _subscriptions: vec![subscription],
         };
@@ -488,6 +496,60 @@ impl TableView {
                 cx.notify();
             },
         ));
+    }
+
+    /// Opens column stats under visible column `col`, or closes them.
+    fn toggle_stats(&mut self, col: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let was_open = self.stats.take().is_some();
+        self.grid.update(cx, |g, _| g.set_popover(None));
+        let Some(column) = self
+            .visible_columns()
+            .get(col)
+            .and_then(|i| self.columns.get(*i))
+            .cloned()
+        else {
+            return;
+        };
+        if was_open || self.conn.column_stats().is_none() {
+            cx.notify();
+            return;
+        }
+        let (conn, table) = (self.conn.clone(), self.table.clone());
+        let view = cx.new(|cx| ColumnStatsView::new(conn, table, column.clone(), cx));
+        self._subscriptions.push(cx.subscribe_in(
+            &view,
+            window,
+            move |this, _, action: &StatsAction, window, cx| {
+                this.stats = None;
+                this.grid.update(cx, |g, _| g.set_popover(None));
+                match action {
+                    StatsAction::Close => {}
+                    StatsAction::Filter(value) => {
+                        this.filters.clear();
+                        let filter = Filter {
+                            column: column.name.clone(),
+                            op: FilterOp::Eq,
+                            value: value.clone(),
+                        };
+                        this.add_filter(Some(filter), window, cx);
+                        this.apply_filters(cx);
+                    }
+                    StatsAction::Chart => {
+                        // ponytail: unquoted identifiers; fine for plain names, quote via the dialect if it bites.
+                        let table = this.table.to_string();
+                        let c = column.name.to_string();
+                        cx.emit(OpenQuery(format!(
+                        "SELECT {c}, count(*) AS n\nFROM {table}\nGROUP BY {c}\nORDER BY n DESC;"
+                    )));
+                    }
+                }
+                cx.notify();
+            },
+        ));
+        self.grid
+            .update(cx, |g, _| g.set_popover(Some((col, view.clone().into()))));
+        self.stats = Some(view);
+        cx.notify();
     }
 
     fn add_filter(&mut self, initial: Option<Filter>, window: &mut Window, cx: &mut Context<Self>) {

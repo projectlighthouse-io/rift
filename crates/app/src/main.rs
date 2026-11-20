@@ -4,6 +4,7 @@ mod actions;
 mod assets;
 mod chart;
 mod chart_panel;
+mod column_stats;
 mod connection_dialog;
 mod connections;
 mod dropdown;

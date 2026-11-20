@@ -14,7 +14,7 @@ use types::{
 
 use crate::kv_view::{KeyEvent, KeyTree, KeyView, MemoryPanel, OpenKey};
 use crate::sql_editor::SqlEditor;
-use crate::table_view::{OpenTable, TableView};
+use crate::table_view::{OpenQuery, OpenTable, TableView};
 use crate::theme::{self, c};
 use crate::{runtime, ui};
 
@@ -199,6 +199,13 @@ impl Session {
                             window,
                             cx,
                         );
+                    },
+                ));
+                self._subscriptions.push(cx.subscribe_in(
+                    &view,
+                    window,
+                    |this, _, event: &OpenQuery, window, cx| {
+                        this.open_query(event.0.clone(), window, cx)
                     },
                 ));
                 self.docs.push(Doc::Table(view));
