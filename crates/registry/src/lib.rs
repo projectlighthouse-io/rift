@@ -17,6 +17,8 @@ pub fn all() -> Vec<Box<dyn DriverFactory>> {
         clickhouse_driver::factory(),
         #[cfg(feature = "redis")]
         redis_driver::factory(),
+        #[cfg(feature = "foundationdb")]
+        foundationdb_driver::factory(),
         #[cfg(feature = "fake")]
         Box::new(testkit::FakeSqlFactory::default()),
         #[cfg(feature = "fake")]
