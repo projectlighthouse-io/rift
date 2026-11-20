@@ -28,3 +28,18 @@ services:
       interval: 2s
       timeout: 2s
       retries: 30
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: mysql
+      MYSQL_DATABASE: shop
+    ports:
+      - "${RIFT_MYSQL_PORT:-3306}:3306"
+    volumes:
+      - ./dev/seed:/seed:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-pmysql"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
