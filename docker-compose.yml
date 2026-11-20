@@ -62,3 +62,13 @@ services:
       interval: 2s
       timeout: 2s
       retries: 60
+
+  foundationdb:
+    image: foundationdb/foundationdb:7.3.69
+    environment:
+      # Advertise 127.0.0.1 so clients on the host (and containers sharing this network
+      # namespace) can reach it through the mapped port.
+      FDB_NETWORKING_MODE: host
+      FDB_PORT: "4500"
+    ports:
+      - "4500:4500"
