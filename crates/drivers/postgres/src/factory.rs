@@ -57,6 +57,8 @@ fn options(config: &ConnConfig) -> Result<PgConnectOptions, Error> {
         .username(config.get("user").unwrap_or("postgres"))
         .database(config.get("database").unwrap_or("postgres"))
         .application_name("rift")
+        // Schemas change under a database client; cached `SELECT *` metadata goes stale.
+        .statement_cache_capacity(0)
         .ssl_mode(match config.tls {
             TlsMode::Require => PgSslMode::Require,
             TlsMode::Prefer => PgSslMode::Prefer,

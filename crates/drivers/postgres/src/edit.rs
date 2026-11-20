@@ -1,11 +1,11 @@
 //! Row edits and atomic batches, each in one transaction.
 
-use dialect::{Dialect, edits};
+use dialect::{Dialect, ddl, edits};
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use sqlx::AssertSqlSafe;
-use traits::{EditRows, Transactions};
-use types::{Error, RowEdit, TxOp};
+use traits::{EditRows, EditSchema, Transactions};
+use types::{Error, RowEdit, SchemaChange, TableRef, TxOp};
 
 use crate::connection::PgConnection;
 use crate::error;
@@ -53,6 +53,31 @@ impl Transactions for PgConnection {
                     _ => Err(Error::unsupported("key-value op on PostgreSQL")),
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
+            let mut tx = self.pool.begin().await.map_err(error::map)?;
+            for sql in statements {
+                sqlx::raw_sql(AssertSqlSafe(sql))
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(error::map)?;
+            }
+            tx.commit().await.map_err(error::map)
+        }
+        .boxed()
+    }
+}
+
+impl EditSchema for PgConnection {
+    fn preview(&self, table: &TableRef, changes: &[SchemaChange]) -> Result<Vec<String>, Error> {
+        ddl::schema_changes_sql(Dialect::Postgres, table, changes)
+    }
+
+    fn apply_schema<'a>(
+        &'a self,
+        table: &'a TableRef,
+        changes: &'a [SchemaChange],
+    ) -> BoxFuture<'a, Result<(), Error>> {
+        async move {
+            let statements = self.preview(table, changes)?;
             let mut tx = self.pool.begin().await.map_err(error::map)?;
             for sql in statements {
                 sqlx::raw_sql(AssertSqlSafe(sql))
