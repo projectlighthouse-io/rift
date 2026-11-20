@@ -14,3 +14,10 @@ workspace = true
 types = { workspace = true }
 traits = { workspace = true }
 dialect = { workspace = true }
+futures = { workspace = true }
+fdb-ffi = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+testkit = { workspace = true }
+tokio = { workspace = true }
