@@ -8,8 +8,11 @@ use gpui::{
 };
 use gpui_component::input::{InputEvent, InputState};
 use traits::Connection;
-use types::{ConnectionId, DbObject, Error, Filter, ObjectKind, SchemaName, TableRef, Tag};
+use types::{
+    ConnectionId, DbObject, Error, Filter, KeyBytes, ObjectKind, SchemaName, TableRef, Tag,
+};
 
+use crate::kv_view::{KeyEvent, KeyTree, KeyView, MemoryPanel, OpenKey};
 use crate::sql_editor::SqlEditor;
 use crate::table_view::{OpenTable, TableView};
 use crate::theme::{self, c};
@@ -27,6 +30,7 @@ const SECTIONS: [(ObjectKind, &str); 4] = [
 pub(crate) enum Doc {
     Table(Entity<TableView>),
     Query(Entity<SqlEditor>),
+    Key(Entity<KeyView>),
 }
 
 impl Doc {
@@ -34,6 +38,7 @@ impl Doc {
         match self {
             Doc::Table(v) => v.clone().into(),
             Doc::Query(v) => v.clone().into(),
+            Doc::Key(v) => v.clone().into(),
         }
     }
 }
@@ -55,6 +60,8 @@ pub(crate) struct Session {
     docs: Vec<Doc>,
     active: Option<usize>,
     error: Option<String>,
+    keys: Option<Entity<KeyTree>>,
+    memory: Option<Entity<MemoryPanel>>,
     _loading: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -91,10 +98,29 @@ impl Session {
             docs: Vec::new(),
             active: None,
             error: None,
+            keys: None,
+            memory: None,
             _loading: None,
             _subscriptions: vec![subscription],
         };
-        session.refresh(cx);
+        if session.conn.key_value().is_some() {
+            let tree = cx.new(|cx| KeyTree::new(session.conn.clone(), window, cx));
+            session._subscriptions.push(cx.subscribe_in(
+                &tree,
+                window,
+                |this, _, e: &OpenKey, window, cx| {
+                    this.open_key(e.0.clone(), window, cx);
+                },
+            ));
+            session.keys = Some(tree);
+        }
+        if session.conn.memory_stats().is_some() {
+            let conn = session.conn.clone();
+            session.memory = Some(cx.new(|cx| MemoryPanel::new(conn, cx)));
+        }
+        if session.conn.browse().is_some() {
+            session.refresh(cx);
+        }
         session
     }
 
@@ -155,7 +181,7 @@ impl Session {
         let existing = filter.is_none().then(|| {
             self.docs.iter().position(|d| match d {
                 Doc::Table(v) => v.read(cx).table == table,
-                Doc::Query(_) => false,
+                Doc::Query(_) | Doc::Key(_) => false,
             })
         });
         let ix = match existing.flatten() {
@@ -198,6 +224,51 @@ impl Session {
         cx.notify();
     }
 
+    /// Opens (or focuses) a key document.
+    pub(crate) fn open_key(&mut self, key: KeyBytes, window: &mut Window, cx: &mut Context<Self>) {
+        let existing = self
+            .docs
+            .iter()
+            .position(|d| matches!(d, Doc::Key(v) if v.read(cx).key == key));
+        let ix = match existing {
+            Some(ix) => ix,
+            None => {
+                let conn = self.conn.clone();
+                let view = cx.new(|cx| KeyView::new(conn, key, window, cx));
+                self._subscriptions.push(cx.subscribe_in(
+                    &view,
+                    window,
+                    |this, view, e: &KeyEvent, _, cx| {
+                        match e {
+                            KeyEvent::Deleted(key) => {
+                                if let Some(ix) = this
+                                    .docs
+                                    .iter()
+                                    .position(|d| matches!(d, Doc::Key(v) if v == view))
+                                {
+                                    this.close_doc(ix, cx);
+                                }
+                                if let Some(tree) = &this.keys {
+                                    tree.update(cx, |t, cx| t.forget(key, cx));
+                                }
+                            }
+                            KeyEvent::Renamed => {
+                                if let Some(tree) = &this.keys {
+                                    tree.update(cx, |t, cx| t.rescan(cx));
+                                }
+                            }
+                        }
+                        cx.notify();
+                    },
+                ));
+                self.docs.push(Doc::Key(view));
+                self.docs.len() - 1
+            }
+        };
+        self.active = Some(ix);
+        cx.notify();
+    }
+
     fn close_doc(&mut self, ix: usize, cx: &mut Context<Self>) {
         if ix < self.docs.len() {
             if let Doc::Query(v) = &self.docs[ix] {
@@ -216,7 +287,7 @@ impl Session {
     fn selected_table(&self, cx: &Context<Self>) -> Option<TableRef> {
         match self.docs.get(self.active?)? {
             Doc::Table(v) => Some(v.read(cx).table.clone()),
-            Doc::Query(_) => None,
+            Doc::Query(_) | Doc::Key(_) => None,
         }
     }
 
@@ -539,6 +610,7 @@ impl Session {
                 let (icon, label, is_table) = match doc {
                     Doc::Table(v) => ("table", v.read(cx).table.name.to_string(), true),
                     Doc::Query(v) => ("code", v.read(cx).title.to_string(), false),
+                    Doc::Key(v) => ("table", v.read(cx).key.to_display(), true),
                 };
                 div()
                     .id(("doc-tab", ix))
@@ -589,31 +661,39 @@ impl Session {
                         cx.notify();
                     }))
             }))
-            .child(ui::icon_button("new-query", "plus", 28., 15.).on_click(
-                cx.listener(|this, _, window, cx| this.open_query(String::new(), window, cx)),
-            ))
+            .when(self.conn.query().is_some(), |d| {
+                d.child(ui::icon_button("new-query", "plus", 28., 15.).on_click(
+                    cx.listener(|this, _, window, cx| this.open_query(String::new(), window, cx)),
+                ))
+            })
     }
 }
 
 impl Render for Session {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let content = self.active.and_then(|ix| self.docs.get(ix)).map(Doc::view);
-        div()
-            .flex()
-            .size_full()
-            .min_h_0()
-            .child(self.render_sidebar(cx))
-            .child(
-                div()
-                    .relative()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .child(ui::dot_grid())
-                    .child(self.render_tabs(cx))
-                    .child(div().flex_1().min_h_0().children(content)),
-            )
+        let sidebar = match &self.keys {
+            Some(tree) => tree.clone().into_any_element(),
+            None => self.render_sidebar(cx).into_any_element(),
+        };
+        div().flex().size_full().min_h_0().child(sidebar).child(
+            div()
+                .relative()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .child(ui::dot_grid())
+                .child(self.render_tabs(cx))
+                .child(
+                    div()
+                        .flex()
+                        .flex_1()
+                        .min_h_0()
+                        .child(div().flex_1().min_w_0().h_full().children(content))
+                        .children(self.memory.clone()),
+                ),
+        )
     }
 }

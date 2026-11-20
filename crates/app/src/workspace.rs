@@ -260,6 +260,10 @@ impl Workspace {
                         .on_click(cx.listener(|this, _, window, cx| this.show_list(window, cx))),
                 ),
             );
+        let can_query = self
+            .active
+            .and_then(|ix| self.sessions.get(ix))
+            .is_some_and(|s| s.read(cx).conn.query().is_some());
         let right = div()
             .flex()
             .items_center()
@@ -286,19 +290,21 @@ impl Workspace {
                     .child(div().flex_1().child("Open anything…"))
                     .child(ui::kbd("⌘K", cx).text_color(c(theme::MUTED))),
             )
-            .child(
-                ui::secondary_button("sql", "SQL")
-                    .child(ui::icon("terminal", 14., theme::TEXT))
-                    .flex_row_reverse()
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        let session = this.active.and_then(|ix| this.sessions.get(ix)).cloned();
-                        if let Some(session) = session {
-                            this.start = None;
-                            this._start_subscription = None;
-                            session.update(cx, |s, cx| s.open_query(String::new(), window, cx));
-                        }
-                    })),
-            );
+            .when(can_query, |d| {
+                d.child(
+                    ui::secondary_button("sql", "SQL")
+                        .child(ui::icon("terminal", 14., theme::TEXT))
+                        .flex_row_reverse()
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            let session = this.active.and_then(|ix| this.sessions.get(ix)).cloned();
+                            if let Some(session) = session {
+                                this.start = None;
+                                this._start_subscription = None;
+                                session.update(cx, |s, cx| s.open_query(String::new(), window, cx));
+                            }
+                        })),
+                )
+            });
         div()
             .flex()
             .flex_none()
