@@ -94,3 +94,19 @@ Format: date, decision, reason.
   (it renders text at 0.875 × its size) and the wrapper adds 2px so text sits 10px in.
 - **UI checks are driven by real input** (CGEvent clicks and key codes) against the running app;
   helpers live in the untracked `.tinker/`.
+
+## 2026-11-20 — M4
+
+- **Edits are inlined SQL in one transaction** (`dialect::edits`, snapshot-tested with `insta`).
+  Updates and deletes must hit exactly one row by primary key, otherwise the whole save rolls
+  back with "a row was changed or deleted by someone else".
+- **Typed cell text becomes `Value::Text`** (empty or `NULL` means `NULL`) and is sent as an
+  untyped literal, so the database coerces it to the column type and reports bad input itself.
+- **New rows show column defaults** from `Describe` (casts stripped, string quotes removed);
+  serial keys stay blank. Only cells the user sets are inserted, so defaults apply.
+- **Inline editing focuses its input one tick later** (`defer_in`): the table view tracks focus
+  for ⌘S and would otherwise take focus back on the same mouse-down.
+- **FK links open a new table tab** with an `is` filter on the referenced column.
+- **Dev switch `RIFT_DEV_INSECURE_SECRETS=1`** keeps passwords in a plaintext JSON file in the
+  data dir. Unsigned rebuilds otherwise trigger a keychain password prompt on every launch,
+  which blocks automated UI checks. Never the default.
