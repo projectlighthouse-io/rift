@@ -55,6 +55,37 @@ fn button_base(id: impl Into<ElementId>) -> Stateful<Div> {
         .whitespace_nowrap()
 }
 
+/// Black primary button (`Save changes ⌘S`).
+pub(crate) fn primary_button(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+) -> Stateful<Div> {
+    button_base(id)
+        .h(px(28.))
+        .px(px(12.))
+        .bg(c(theme::PRIMARY))
+        .text_color(c(theme::BG))
+        .text_size(px(12.5))
+        .font_weight(FontWeight::MEDIUM)
+        .hover(|s| s.opacity(0.9))
+        .child(label.into())
+}
+
+/// Borderless text button (`Discard`, `Cancel`).
+pub(crate) fn ghost_button(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+) -> Stateful<Div> {
+    button_base(id)
+        .h(px(28.))
+        .px(px(10.))
+        .text_color(c(theme::MUTED))
+        .text_size(px(13.))
+        .font_weight(FontWeight::MEDIUM)
+        .hover(|s| s.bg(c(theme::RAISED)))
+        .child(label.into())
+}
+
 /// Raised secondary button (`Apply`, `SQL`).
 pub(crate) fn secondary_button(
     id: impl Into<ElementId>,
@@ -121,7 +152,22 @@ pub(crate) fn dot_grid() -> impl IntoElement {
         },
     )
     .absolute()
+    .top_0()
+    .left_0()
     .size_full()
+}
+
+/// A borderless text input whose text is `text_px` and whose own horizontal padding is 8px.
+/// Wrap it in a bordered box with 2px padding to get the design's 10px inset.
+pub(crate) fn input(
+    state: &gpui::Entity<gpui_component::input::InputState>,
+    text_px: f32,
+) -> gpui_component::input::Input {
+    use gpui_component::Sizable as _;
+    // gpui-component renders input text at 0.875 × the size.
+    gpui_component::input::Input::new(state)
+        .appearance(false)
+        .with_size(gpui_component::Size::Size(px(text_px / 0.875)))
 }
 
 /// `1284` → `1,284`.

@@ -6,7 +6,7 @@ use gpui::prelude::*;
 use gpui::{
     AnyView, Context, Entity, FontWeight, SharedString, Subscription, Task, Window, div, px,
 };
-use gpui_component::input::{Input, InputEvent, InputState};
+use gpui_component::input::{InputEvent, InputState};
 use traits::Connection;
 use types::{DbObject, Error, ObjectKind, SchemaName, TableRef, Tag};
 
@@ -243,7 +243,7 @@ impl Session {
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(6.))
+                    .gap(px(0.))
                     .h(px(30.))
                     .pl(px(9.))
                     .pr(px(4.))
@@ -252,12 +252,7 @@ impl Session {
                     .border_1()
                     .border_color(c(theme::LINE))
                     .child(ui::icon("search", 13., theme::FAINT))
-                    .child(
-                        div()
-                            .flex_1()
-                            .text_size(px(13.))
-                            .child(Input::new(&self.filter).appearance(false)),
-                    ),
+                    .child(div().flex_1().child(ui::input(&self.filter, 13.))),
             );
 
         let mut nav = div()

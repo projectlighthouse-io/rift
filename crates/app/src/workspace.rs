@@ -1,13 +1,17 @@
-//! The window root: top bar with open connections, then the active session.
+//! The window root: top bar with open connections, then the active session or the start
+//! screen (connections list / connection dialog).
 
 use std::time::Instant;
 
 use gpui::prelude::*;
-use gpui::{Context, Entity, FontWeight, Window, canvas, div, px};
+use gpui::{AnyElement, Context, Entity, FontWeight, Subscription, Window, canvas, div, px};
+use types::{SafeMode, SavedConnection, Tag};
 
+use crate::connection_dialog::{ConnectionDialog, DialogEvent};
+use crate::connections::{ConnectionsEvent, ConnectionsScreen};
 use crate::session::Session;
 use crate::theme::{self, c};
-use crate::ui;
+use crate::{state, ui};
 
 /// Frames slower than this are logged in debug builds.
 const FRAME_BUDGET_MS: u128 = 16;
@@ -17,28 +21,137 @@ fn frame_log_enabled() -> bool {
     std::env::var_os("RIFT_FRAME_LOG").is_some()
 }
 
+enum Start {
+    List(Entity<ConnectionsScreen>),
+    Dialog(Entity<ConnectionDialog>),
+}
+
 /// Root view.
 pub(crate) struct Workspace {
     sessions: Vec<Entity<Session>>,
     active: Option<usize>,
+    start: Option<Start>,
+    _start_subscription: Option<Subscription>,
 }
 
 impl Workspace {
-    pub(crate) fn new() -> Self {
-        Self {
+    pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut workspace = Self {
             sessions: Vec::new(),
             active: None,
-        }
+            start: None,
+            _start_subscription: None,
+        };
+        workspace.show_list(window, cx);
+        workspace
     }
 
-    /// Adds a session and makes it active.
-    pub(crate) fn add_session(&mut self, session: Entity<Session>, cx: &mut Context<Self>) {
-        self.sessions.push(session);
-        self.active = Some(self.sessions.len() - 1);
+    /// Shows the connections list.
+    fn show_list(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let screen = cx.new(|cx| ConnectionsScreen::new(window, cx));
+        self._start_subscription = Some(cx.subscribe_in(
+            &screen,
+            window,
+            |this, _, event: &ConnectionsEvent, window, cx| match event {
+                ConnectionsEvent::Connect(saved) => this.connect(saved.clone(), window, cx),
+                ConnectionsEvent::New => this.show_dialog(None, window, cx),
+                ConnectionsEvent::Edit(saved) => this.show_dialog(Some(saved.clone()), window, cx),
+            },
+        ));
+        self.start = Some(Start::List(screen));
         cx.notify();
     }
 
-    fn close_session(&mut self, ix: usize, cx: &mut Context<Self>) {
+    fn show_dialog(
+        &mut self,
+        editing: Option<SavedConnection>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let groups: Vec<String> = state::manager(cx)
+            .list()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|s| s.group)
+            .collect();
+        let dialog = cx.new(|cx| ConnectionDialog::new(editing, groups, window, cx));
+        self._start_subscription = Some(cx.subscribe_in(
+            &dialog,
+            window,
+            |this, _, event: &DialogEvent, window, cx| match event {
+                DialogEvent::Saved(connection) => {
+                    let connection = (**connection).clone();
+                    this.show_list(window, cx);
+                    this.connect(connection, window, cx);
+                }
+                DialogEvent::Deleted | DialogEvent::Cancelled => this.show_list(window, cx),
+            },
+        ));
+        self.start = Some(Start::Dialog(dialog));
+        cx.notify();
+    }
+
+    fn set_status(&self, text: String, is_error: bool, cx: &mut Context<Self>) {
+        if let Some(Start::List(screen)) = &self.start {
+            screen.update(cx, |s, cx| {
+                s.status = Some((text, is_error));
+                cx.notify();
+            });
+        }
+    }
+
+    /// Connects on the I/O runtime, then opens a session tab.
+    fn connect(&mut self, saved: SavedConnection, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_status(format!("Connecting to {}…", saved.name), false, cx);
+        let manager = state::manager(cx);
+        let (tx, rx) = futures::channel::oneshot::channel();
+        let target = saved.clone();
+        cx.global::<crate::runtime::Io>().0.spawn_task(async move {
+            let password = manager.password(target.id);
+            let result = match password {
+                Ok(password) => {
+                    manager
+                        .connect(&conn::ConnectionManager::config(&target, password))
+                        .await
+                }
+                Err(e) => Err(e),
+            };
+            let _ = tx.send(result);
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(result) = rx.await else { return };
+            let _ = this.update_in(cx, |this, window, cx| match result {
+                Ok(conn) => {
+                    let read_only = saved.safe_mode == SafeMode::ReadOnly;
+                    let tag = saved.tag.unwrap_or(Tag::Green);
+                    let session = cx.new(|cx| {
+                        let mut s = Session::new(
+                            saved.name.clone().into(),
+                            tag,
+                            read_only,
+                            conn,
+                            window,
+                            cx,
+                        );
+                        // Dev check: `RIFT_DEV_QUERY` opens a result tab (100k-row scroll test).
+                        if let Ok(sql) = std::env::var("RIFT_DEV_QUERY") {
+                            s.open_query(sql, cx);
+                        }
+                        s
+                    });
+                    this.sessions.push(session);
+                    this.active = Some(this.sessions.len() - 1);
+                    this.start = None;
+                    this._start_subscription = None;
+                    cx.notify();
+                }
+                Err(e) => this.set_status(format!("{}: {e}", saved.name), true, cx),
+            });
+        })
+        .detach();
+    }
+
+    fn close_session(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         if ix < self.sessions.len() {
             let session = self.sessions.remove(ix);
             let conn = session.read(cx).conn.clone();
@@ -48,12 +161,16 @@ impl Workspace {
                 Some(a) if a >= ix && a > 0 => Some(a - 1),
                 other => other,
             };
+            if self.sessions.is_empty() {
+                self.show_list(window, cx);
+            }
             cx.notify();
         }
     }
 
     fn render_top_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let mono = theme::mono(cx);
+        let showing_start = self.start.is_some();
         let brand = div()
             .flex()
             .items_center()
@@ -77,8 +194,7 @@ impl Workspace {
             .min_w_0()
             .children(self.sessions.iter().enumerate().map(|(ix, session)| {
                 let s = session.read(cx);
-                let active = self.active == Some(ix);
-                let name = s.name.clone();
+                let active = !showing_start && self.active == Some(ix);
                 div()
                     .id(("conn-tab", ix))
                     .flex()
@@ -107,7 +223,7 @@ impl Workspace {
                         div()
                             .text_size(px(13.))
                             .font_weight(FontWeight::MEDIUM)
-                            .child(name),
+                            .child(s.name.clone()),
                     )
                     .child(
                         div()
@@ -124,21 +240,24 @@ impl Workspace {
                     })
                     .child(
                         ui::icon_button(("close-conn", ix), "close", 22., 15.).on_click(
-                            cx.listener(move |this, _, _, cx| {
+                            cx.listener(move |this, _, window, cx| {
                                 cx.stop_propagation();
-                                this.close_session(ix, cx);
+                                this.close_session(ix, window, cx);
                             }),
                         ),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.active = Some(ix);
+                        this.start = None;
+                        this._start_subscription = None;
                         cx.notify();
                     }))
             }))
             .child(
-                div()
-                    .mb(px(3.))
-                    .child(ui::icon_button("open-conn", "plus", 30., 15.)),
+                div().mb(px(3.)).child(
+                    ui::icon_button("open-conn", "plus", 30., 15.)
+                        .on_click(cx.listener(|this, _, window, cx| this.show_list(window, cx))),
+                ),
             );
         let right = div()
             .flex()
@@ -190,9 +309,14 @@ impl Workspace {
 impl Render for Workspace {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let started = Instant::now();
-        let body = match self.active.and_then(|ix| self.sessions.get(ix)) {
-            Some(session) => session.clone().into_any_element(),
-            None => div()
+        let body: AnyElement = match (
+            &self.start,
+            self.active.and_then(|ix| self.sessions.get(ix)),
+        ) {
+            (Some(Start::List(screen)), _) => screen.clone().into_any_element(),
+            (Some(Start::Dialog(dialog)), _) => dialog.clone().into_any_element(),
+            (None, Some(session)) => session.clone().into_any_element(),
+            (None, None) => div()
                 .relative()
                 .size_full()
                 .child(ui::dot_grid())
@@ -206,7 +330,9 @@ impl Render for Workspace {
             .font_family(theme::SERIF)
             .text_size(px(13.))
             .text_color(c(theme::TEXT))
-            .child(self.render_top_bar(cx))
+            .when(!self.sessions.is_empty(), |d| {
+                d.child(self.render_top_bar(cx))
+            })
             .child(div().flex_1().min_h_0().child(body))
             .child(
                 canvas(
