@@ -2,6 +2,8 @@
 
 mod actions;
 mod assets;
+mod chart;
+mod chart_panel;
 mod connection_dialog;
 mod connections;
 mod dropdown;

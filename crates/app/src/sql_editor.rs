@@ -22,6 +22,7 @@ use tokio_util::sync::CancellationToken;
 use traits::{Connection, StatementOutput};
 use types::{Column, ConnectionId, Error, HistoryEntry, ObjectKind, Row, Tag};
 
+use crate::chart_panel::{ChartPanel, PinChart};
 use crate::grid::Grid;
 use crate::sql_syntax::{self, SchemaNames, SqlCompletions};
 use crate::theme::{self, c};
@@ -29,10 +30,13 @@ use crate::{export, runtime, state, ui};
 
 const EDITOR_HEIGHT: f32 = 330.0;
 const CURRENT_STATEMENT: u32 = 0xf6f4f1;
+/// `active_tab` value of the Chart tab.
+const CHART_TAB: usize = usize::MAX;
 
 enum RunEvent {
     Columns {
         columns: Vec<Column>,
+        sql: String,
     },
     Rows {
         rows: Vec<Row>,
@@ -56,6 +60,7 @@ enum RunEvent {
 struct ResultTab {
     grid: Entity<Grid>,
     rows: u64,
+    sql: String,
 }
 
 struct Message {
@@ -82,6 +87,7 @@ pub(crate) struct SqlEditor {
     current: RangeDecorationCollection,
     marked: Option<std::ops::Range<usize>>,
     results: Vec<ResultTab>,
+    chart: Option<Entity<ChartPanel>>,
     messages: Vec<Message>,
     /// Index into `results`; `results.len()` means the Messages tab.
     active_tab: usize,
@@ -139,6 +145,7 @@ impl SqlEditor {
             current,
             marked: None,
             results: Vec::new(),
+            chart: None,
             messages: Vec::new(),
             active_tab: 0,
             running: None,
@@ -283,6 +290,7 @@ impl SqlEditor {
         let token = CancellationToken::new();
         self.running = Some(token.clone());
         self.results.clear();
+        self.chart = None;
         self.messages.clear();
         self.active_tab = 0;
         self.summary = None;
@@ -315,6 +323,7 @@ impl SqlEditor {
                         StatementOutput::Rows(mut stream) => {
                             send(RunEvent::Columns {
                                 columns: stream.columns,
+                                sql: sql.clone(),
                             });
                             let mut count = 0u64;
                             while let Some(page) = stream.pages.next().await {
@@ -363,10 +372,10 @@ impl SqlEditor {
 
     fn apply(&mut self, event: RunEvent, cx: &mut Context<Self>) {
         match event {
-            RunEvent::Columns { columns } => {
+            RunEvent::Columns { columns, sql } => {
                 let grid = cx.new(|_| Grid::new());
                 grid.update(cx, |g, _| g.set_data(columns, Vec::new(), 1));
-                self.results.push(ResultTab { grid, rows: 0 });
+                self.results.push(ResultTab { grid, rows: 0, sql });
             }
             RunEvent::Rows { rows } => {
                 if let Some(tab) = self.results.last_mut() {
@@ -451,6 +460,53 @@ impl SqlEditor {
         if let Some(token) = self.running.take() {
             token.cancel();
             cx.notify();
+        }
+    }
+
+    /// Shows the Chart tab for the last result, building the panel on first use.
+    fn open_chart(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(last) = self.results.last() else {
+            return;
+        };
+        if self.chart.is_none() {
+            let columns = last.grid.read(cx).columns().to_vec();
+            let (conn, sql) = (self.conn.clone(), last.sql.clone());
+            let panel = cx.new(|cx| ChartPanel::new(conn, sql, columns, window, cx));
+            let pin = cx.subscribe(&panel, |this, _, event: &PinChart, cx| this.pin(event, cx));
+            let notify = cx.observe(&panel, |_, _, cx| cx.notify());
+            self._subscriptions.extend([pin, notify]);
+            self.chart = Some(panel);
+        }
+        self.active_tab = CHART_TAB;
+        cx.notify();
+    }
+
+    /// Adds the chart to this connection's first dashboard, creating one if needed.
+    fn pin(&mut self, event: &PinChart, cx: &mut Context<Self>) {
+        let store = state::dashboards(cx);
+        let mut dashboard = store
+            .list(self.connection_id)
+            .ok()
+            .and_then(|d| d.into_iter().next())
+            .unwrap_or_else(|| types::Dashboard {
+                id: types::DashboardId::random(),
+                connection: self.connection_id,
+                title: "Overview".into(),
+                cards: Vec::new(),
+            });
+        dashboard.cards.push(types::ChartCard {
+            id: types::CardId::random(),
+            title: event.title.clone(),
+            subtitle: self.label.to_string(),
+            chart: event.spec.clone(),
+            refresh_secs: None,
+            alert: None,
+        });
+        if let Err(e) = store.save(&dashboard) {
+            self.messages.push(Message {
+                text: format!("Pin failed: {e}"),
+                error: true,
+            });
         }
     }
 
@@ -709,6 +765,15 @@ impl SqlEditor {
                 })),
             );
         }
+        if self.conn.aggregate().is_some() && !self.results.is_empty() {
+            tabs = tabs.child(
+                tab(CHART_TAB, "Chart".into(), self.active_tab == CHART_TAB)
+                    .gap(px(6.))
+                    .child(ui::icon("chart", 13., theme::MUTED))
+                    .flex_row_reverse()
+                    .on_click(cx.listener(|this, _, window, cx| this.open_chart(window, cx))),
+            );
+        }
         tabs = tabs.child(
             tab(
                 messages_ix,
@@ -803,9 +868,11 @@ impl SqlEditor {
                             })),
                     ),
             );
-        let body = match self.results.get(self.active_tab) {
-            Some(r) => r.grid.clone().into_any_element(),
-            None => {
+        let chart = self.chart.clone().filter(|_| self.active_tab == CHART_TAB);
+        let body = match (self.results.get(self.active_tab), chart) {
+            (_, Some(chart)) => chart.into_any_element(),
+            (Some(r), _) => r.grid.clone().into_any_element(),
+            (None, None) => {
                 let mono = theme::mono(cx);
                 div()
                     .id("messages")
@@ -843,8 +910,25 @@ impl SqlEditor {
     fn render_status(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let position = self.editor.read(cx).cursor_position();
         let sep = || div().text_color(c(theme::FAINT)).child("·");
+        let chart_status = self
+            .chart
+            .as_ref()
+            .filter(|_| self.active_tab == CHART_TAB)
+            .and_then(|c| c.read(cx).status());
         let left = match (&self.summary, self.running.is_some()) {
             (_, true) => div().child("Running…  Esc to cancel"),
+            _ if let Some((ok, text)) = chart_status => div()
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .text_color(c(if ok {
+                    theme::MUTED
+                } else {
+                    theme::DELETED_TEXT
+                }))
+                .children(ok.then(|| ui::icon("check", 13., theme::NEW_TEXT)))
+                .children(ok.then(|| div().text_color(c(theme::NEW_TEXT)).child("Query OK")))
+                .child(SharedString::from(text)),
             (Some(s), false) if s.ok => div()
                 .flex()
                 .items_center()

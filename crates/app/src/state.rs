@@ -101,3 +101,7 @@ pub(crate) fn manager(cx: &App) -> Arc<ConnectionManager> {
 pub(crate) fn history(cx: &App) -> Arc<dyn traits::HistoryStore> {
     cx.global::<AppState>().store.clone()
 }
+
+pub(crate) fn dashboards(cx: &App) -> Arc<dyn traits::DashboardStore> {
+    cx.global::<AppState>().store.clone()
+}
