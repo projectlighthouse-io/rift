@@ -33,8 +33,8 @@ pub use edit::{ColumnValue, RowEdit, RowEditKind};
 pub use error::Error;
 pub use ids::{CardId, ConnectionId, DashboardId};
 pub use kv::{
-    HashField, KeyEntry, KeyKind, KeyMatch, KeyPage, KeyScan, KvValue, ScanCursor, ScoredMember,
-    StreamEntry, TxOp,
+    HashField, KeyDirectory, KeyEntry, KeyKind, KeyMatch, KeyPage, KeyScan, KvValue, ScanCursor,
+    ScoredMember, StreamEntry, TxOp,
 };
 pub use misc::{BackupReport, ExplainPlan};
 pub use names::{ColumnName, DriverId, FieldKey, IndexName, KeyBytes, SchemaName, TableName};

@@ -95,6 +95,8 @@ pub struct KeyPage {
     pub entries: Vec<KeyEntry>,
     /// `None` when the scan is finished.
     pub cursor: Option<ScanCursor>,
+    /// Database version the page was read at (FoundationDB).
+    pub read_version: Option<u64>,
 }
 
 /// A hash field.
@@ -178,4 +180,13 @@ pub enum TxOp {
         /// Key.
         key: KeyBytes,
     },
+}
+
+/// A directory of the FoundationDB directory layer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyDirectory {
+    /// Path from the root, e.g. `["app", "users"]`.
+    pub path: Vec<String>,
+    /// Key prefix of the directory's contents.
+    pub prefix: KeyBytes,
 }

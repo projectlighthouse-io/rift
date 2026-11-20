@@ -6,8 +6,8 @@ use futures::future::BoxFuture;
 use types::{ConnectionInfo, Error};
 
 use crate::{
-    Aggregate, Backup, Browse, ColumnStats, Describe, EditRows, EditSchema, Explain, KeyExpiry,
-    KeyValue, MemoryStats, Query, TableTtl, Transactions,
+    Aggregate, Backup, Browse, ColumnStats, Describe, EditRows, EditSchema, Explain,
+    KeyDirectories, KeyEncoding, KeyExpiry, KeyValue, MemoryStats, Query, TableTtl, Transactions,
 };
 
 /// An open connection. Implementations add capabilities by overriding the matching accessor to
@@ -45,6 +45,14 @@ pub trait Connection: Send + Sync {
     }
     /// Atomic batches.
     fn transactions(&self) -> Option<&dyn Transactions> {
+        None
+    }
+    /// Directory layer.
+    fn key_directories(&self) -> Option<&dyn KeyDirectories> {
+        None
+    }
+    /// Structured key text (tuples).
+    fn key_encoding(&self) -> Option<&dyn KeyEncoding> {
         None
     }
     /// Key scans and reads/writes.

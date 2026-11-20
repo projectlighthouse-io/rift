@@ -239,6 +239,7 @@ impl KeyValue for RedisConnection {
             Ok(KeyPage {
                 entries,
                 cursor: (next != 0).then(|| ScanCursor(next.to_string().into_bytes())),
+                read_version: None,
             })
         }
         .boxed()

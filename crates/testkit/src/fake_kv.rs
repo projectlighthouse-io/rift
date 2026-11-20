@@ -154,7 +154,14 @@ impl KeyValue for FakeKv {
                     .unwrap_or_default(),
             )
         });
-        async move { Ok(KeyPage { entries, cursor }) }.boxed()
+        async move {
+            Ok(KeyPage {
+                entries,
+                cursor,
+                read_version: None,
+            })
+        }
+        .boxed()
     }
 
     fn get<'a>(&'a self, key: &'a KeyBytes) -> BoxFuture<'a, Result<Option<KvValue>, Error>> {
