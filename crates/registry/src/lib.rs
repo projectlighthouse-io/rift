@@ -9,6 +9,10 @@ pub fn all() -> Vec<Box<dyn DriverFactory>> {
     vec![
         #[cfg(feature = "postgres")]
         postgres_driver::factory(),
+        #[cfg(feature = "mysql")]
+        mysql_driver::factory(),
+        #[cfg(feature = "sqlite")]
+        sqlite_driver::factory(),
         #[cfg(feature = "fake")]
         Box::new(testkit::FakeSqlFactory::default()),
         #[cfg(feature = "fake")]

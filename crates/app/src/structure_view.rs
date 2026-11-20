@@ -752,6 +752,20 @@ impl StructureView {
                         .text_color(c(color))
                         .child(SharedString::from(text)),
                 )
+                .when(
+                    n > 0
+                        && !self
+                            .conn
+                            .edit_schema()
+                            .is_some_and(|e| e.transactional_ddl()),
+                    |d| {
+                        d.child(ui::badge(
+                            "Cannot be rolled back",
+                            theme::EDITED_TEXT,
+                            theme::EDITED_BG,
+                        ))
+                    },
+                )
                 .when(n > 0, |d| {
                     d.child(ui::badge(
                         format!("{n} pending change{}", if n == 1 { "" } else { "s" }),

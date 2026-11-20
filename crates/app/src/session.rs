@@ -47,6 +47,8 @@ pub(crate) struct Session {
     id: ConnectionId,
     queries: usize,
     schema: Option<SchemaName>,
+    schemas: Vec<SchemaName>,
+    schema_menu: bool,
     objects: Vec<DbObject>,
     collapsed: Vec<ObjectKind>,
     filter: Entity<InputState>,
@@ -81,6 +83,8 @@ impl Session {
             id,
             queries: 0,
             schema: None,
+            schemas: Vec::new(),
+            schema_menu: false,
             objects: Vec::new(),
             collapsed: vec![ObjectKind::View, ObjectKind::Function, ObjectKind::Enum],
             filter,
@@ -122,13 +126,15 @@ impl Session {
                     Some(s) => browse.objects(s).await?,
                     None => Vec::new(),
                 };
-                Ok::<_, Error>((schema, objects))
+                let schemas = browse.schemas().await.unwrap_or_default();
+                Ok::<_, Error>((schema, objects, schemas))
             },
             |this, result, cx| {
                 match result {
-                    Ok((schema, objects)) => {
+                    Ok((schema, objects, schemas)) => {
                         this.schema = schema;
                         this.objects = objects;
+                        this.schemas = schemas;
                         this.error = None;
                     }
                     Err(e) => this.error = Some(e.to_string()),
@@ -241,24 +247,35 @@ impl Session {
             )
             .child(
                 div()
+                    .id("schema-picker")
+                    .relative()
                     .flex()
                     .items_center()
                     .gap(px(8.))
                     .h(px(32.))
                     .px(px(10.))
                     .rounded(px(6.))
+                    .cursor_pointer()
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.schema_menu = !this.schema_menu;
+                        cx.notify();
+                    }))
+                    .children(self.schema_menu.then(|| self.render_schema_menu(cx)))
                     .bg(c(theme::RAISED))
                     .border_1()
                     .border_color(c(theme::LINE))
                     .text_size(px(13.))
                     .child(ui::icon("database", 14., theme::ACCENT_TEXT))
-                    .child(
-                        div()
-                            .font_family(mono.clone())
-                            .text_size(px(12.5))
-                            .child(SharedString::from(database)),
-                    )
-                    .child(div().text_color(c(theme::FAINT)).child("/"))
+                    // Engines without a schema level (MySQL) report the database as the schema.
+                    .when(database != schema && !database.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .font_family(mono.clone())
+                                .text_size(px(12.5))
+                                .child(SharedString::from(database.clone())),
+                        )
+                        .child(div().text_color(c(theme::FAINT)).child("/"))
+                    })
                     .child(
                         div()
                             .font_family(mono.clone())
@@ -423,10 +440,18 @@ impl Session {
                         theme::tag_color(Tag::Green)
                     })),
             )
-            .child(SharedString::from(match &self.error {
-                Some(e) => e.clone(),
-                None => format!("Connected · {}", self.conn.info().address),
-            }))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
+                    .child(SharedString::from(match &self.error {
+                        Some(e) => e.clone(),
+                        None => format!("Connected · {}", self.conn.info().address),
+                    })),
+            )
             .child(
                 div().ml_auto().child(
                     ui::icon_button("refresh-schema", "refresh", 24., 14.)
@@ -446,6 +471,55 @@ impl Session {
             .child(header)
             .child(nav)
             .child(footer)
+    }
+
+    fn render_schema_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let mono = theme::mono(cx);
+        gpui::deferred(
+            gpui::anchored().snap_to_window().child(
+                div()
+                    .id("schema-menu")
+                    .occlude()
+                    .mt(px(34.))
+                    .w(px(224.))
+                    .max_h(px(320.))
+                    .overflow_y_scroll()
+                    .p(px(4.))
+                    .rounded(px(6.))
+                    .bg(c(theme::BG))
+                    .border_1()
+                    .border_color(c(theme::LINE))
+                    .shadow_md()
+                    .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                        this.schema_menu = false;
+                        cx.notify();
+                    }))
+                    .children(self.schemas.iter().enumerate().map(|(i, schema)| {
+                        let picked = schema.clone();
+                        let current = self.schema.as_ref() == Some(schema);
+                        div()
+                            .id(("schema-option", i))
+                            .flex()
+                            .items_center()
+                            .h(px(28.))
+                            .px(px(8.))
+                            .rounded(px(4.))
+                            .cursor_pointer()
+                            .font_family(mono.clone())
+                            .text_size(px(12.5))
+                            .when(current, |d| d.bg(c(theme::SELECTION)))
+                            .hover(|d| d.bg(c(theme::SELECTION)))
+                            .child(SharedString::from(schema.to_string()))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.schema = Some(picked.clone());
+                                this.schema_menu = false;
+                                this.refresh(cx);
+                            }))
+                    })),
+            ),
+        )
+        .with_priority(1)
     }
 
     fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement {
