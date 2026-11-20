@@ -2005,7 +2005,6 @@ dependencies = [
 name = "foundationdb-driver"
 version = "0.1.0"
 dependencies = [
- "dialect",
  "fdb-ffi",
  "futures",
  "serde_json",

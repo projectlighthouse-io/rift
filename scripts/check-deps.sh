@@ -30,8 +30,11 @@ check() {
 check types ""
 check traits "types"
 check dialect "types"
-for d in postgres mysql sqlite clickhouse redis foundationdb; do
+check fdb-ffi ""
+for d in postgres mysql sqlite clickhouse redis; do
   check "$d-driver" "types traits dialect"
 done
+# The FoundationDB client bindings are the driver's private FFI layer.
+check foundationdb-driver "types traits dialect fdb-ffi"
 
 exit $fail

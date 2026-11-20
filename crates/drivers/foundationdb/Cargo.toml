@@ -13,7 +13,6 @@ workspace = true
 [dependencies]
 types = { workspace = true }
 traits = { workspace = true }
-dialect = { workspace = true }
 futures = { workspace = true }
 fdb-ffi = { workspace = true }
 serde_json = { workspace = true }
