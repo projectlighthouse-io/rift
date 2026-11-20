@@ -12,6 +12,7 @@ mod dropdown;
 mod export;
 mod grid;
 mod kv_view;
+mod range_view;
 mod runtime;
 mod session;
 mod sql_editor;

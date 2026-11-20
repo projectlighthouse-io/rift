@@ -9,12 +9,13 @@ use gpui::{
 use gpui_component::input::{InputEvent, InputState};
 use traits::Connection;
 use types::{
-    ConnectionId, Dashboard, DbObject, Error, Filter, KeyBytes, ObjectKind, SchemaName, TableRef,
-    Tag,
+    ConnectionId, Dashboard, DbObject, Error, Filter, KeyBytes, KeyDirectory, ObjectKind,
+    SchemaName, TableRef, Tag,
 };
 
 use crate::dashboard_view::{AddChart, DashboardView};
 use crate::kv_view::{KeyEvent, KeyTree, KeyView, MemoryPanel, OpenKey};
+use crate::range_view::{DirectoryTree, OpenDirectory, RangeView, ShowSystem};
 use crate::sql_editor::{Pinned, SqlEditor};
 use crate::table_view::{OpenQuery, OpenTable, TableView};
 use crate::theme::{self, c};
@@ -34,6 +35,7 @@ pub(crate) enum Doc {
     Query(Entity<SqlEditor>),
     Key(Entity<KeyView>),
     Dashboard(Entity<DashboardView>),
+    Range(Entity<RangeView>),
 }
 
 impl Doc {
@@ -43,6 +45,7 @@ impl Doc {
             Doc::Query(v) => v.clone().into(),
             Doc::Key(v) => v.clone().into(),
             Doc::Dashboard(v) => v.clone().into(),
+            Doc::Range(v) => v.clone().into(),
         }
     }
 }
@@ -66,6 +69,8 @@ pub(crate) struct Session {
     active: Option<usize>,
     error: Option<String>,
     keys: Option<Entity<KeyTree>>,
+    directories: Option<Entity<DirectoryTree>>,
+    show_system: bool,
     memory: Option<Entity<MemoryPanel>>,
     _loading: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
@@ -105,11 +110,34 @@ impl Session {
             active: None,
             error: None,
             keys: None,
+            directories: None,
+            show_system: false,
             memory: None,
             _loading: None,
             _subscriptions: vec![subscription],
         };
-        if session.conn.key_value().is_some() {
+        if session.conn.key_directories().is_some() {
+            let (conn, name) = (session.conn.clone(), session.name.clone());
+            let tree = cx.new(|cx| DirectoryTree::new(conn, name, window, cx));
+            session._subscriptions.push(cx.subscribe_in(
+                &tree,
+                window,
+                |this, _, e: &OpenDirectory, window, cx| {
+                    this.open_range(e.0.clone(), window, cx);
+                },
+            ));
+            session
+                ._subscriptions
+                .push(cx.subscribe(&tree, |this, _, e: &ShowSystem, cx| {
+                    this.show_system = e.0;
+                    for doc in &this.docs {
+                        if let Doc::Range(v) = doc {
+                            v.update(cx, |v, cx| v.set_include_system(e.0, cx));
+                        }
+                    }
+                }));
+            session.directories = Some(tree);
+        } else if session.conn.key_value().is_some() {
             let tree = cx.new(|cx| KeyTree::new(session.conn.clone(), window, cx));
             session._subscriptions.push(cx.subscribe_in(
                 &tree,
@@ -120,7 +148,8 @@ impl Session {
             ));
             session.keys = Some(tree);
         }
-        if session.conn.memory_stats().is_some() {
+        // The range browser uses the right side for the selected value.
+        if session.conn.memory_stats().is_some() && session.directories.is_none() {
             let conn = session.conn.clone();
             session.memory = Some(cx.new(|cx| MemoryPanel::new(conn, cx)));
         }
@@ -187,7 +216,7 @@ impl Session {
         let existing = filter.is_none().then(|| {
             self.docs.iter().position(|d| match d {
                 Doc::Table(v) => v.read(cx).table == table,
-                Doc::Query(_) | Doc::Key(_) | Doc::Dashboard(_) => false,
+                Doc::Query(_) | Doc::Key(_) | Doc::Dashboard(_) | Doc::Range(_) => false,
             })
         });
         let ix = match existing.flatten() {
@@ -229,6 +258,30 @@ impl Session {
                 v.update(cx, |v, cx| v.reload(cx));
             }
         }
+        cx.notify();
+    }
+
+    /// Opens (or focuses) a directory's range document.
+    pub(crate) fn open_range(
+        &mut self,
+        dir: KeyDirectory,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let existing = self
+            .docs
+            .iter()
+            .position(|d| matches!(d, Doc::Range(v) if v.read(cx).dir == dir));
+        let ix = match existing {
+            Some(ix) => ix,
+            None => {
+                let (conn, system) = (self.conn.clone(), self.show_system);
+                let view = cx.new(|cx| RangeView::new(conn, dir, system, window, cx));
+                self.docs.push(Doc::Range(view));
+                self.docs.len() - 1
+            }
+        };
+        self.active = Some(ix);
         cx.notify();
     }
 
@@ -342,7 +395,7 @@ impl Session {
     fn selected_table(&self, cx: &Context<Self>) -> Option<TableRef> {
         match self.docs.get(self.active?)? {
             Doc::Table(v) => Some(v.read(cx).table.clone()),
-            Doc::Query(_) | Doc::Key(_) | Doc::Dashboard(_) => None,
+            Doc::Query(_) | Doc::Key(_) | Doc::Dashboard(_) | Doc::Range(_) => None,
         }
     }
 
@@ -738,6 +791,7 @@ impl Session {
                     Doc::Query(v) => ("code", v.read(cx).title.to_string(), false),
                     Doc::Key(v) => ("table", v.read(cx).key.to_display(), true),
                     Doc::Dashboard(v) => ("chart", v.read(cx).dashboard.title.clone(), false),
+                    Doc::Range(v) => ("folder", v.read(cx).dir.path.join("/"), true),
                 };
                 div()
                     .id(("doc-tab", ix))
@@ -799,9 +853,10 @@ impl Session {
 impl Render for Session {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let content = self.active.and_then(|ix| self.docs.get(ix)).map(Doc::view);
-        let sidebar = match &self.keys {
-            Some(tree) => tree.clone().into_any_element(),
-            None => self.render_sidebar(cx).into_any_element(),
+        let sidebar = match (&self.directories, &self.keys) {
+            (Some(tree), _) => tree.clone().into_any_element(),
+            (None, Some(tree)) => tree.clone().into_any_element(),
+            (None, None) => self.render_sidebar(cx).into_any_element(),
         };
         div().flex().size_full().min_h_0().child(sidebar).child(
             div()
