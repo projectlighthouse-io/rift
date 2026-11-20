@@ -217,3 +217,22 @@ Format: date, decision, reason.
 - **"Add chart" opens a query tab;** charts are built in a result's Chart tab and pinned.
 - **CI test job drops debug info and frees runner disk;** the GPUI debug build plus four
   database services ran out of space.
+
+## 2026-11-21 — M11
+
+- **`libfdb_c` is loaded at runtime** (`libloading`), not linked, so Rift builds and runs
+  without it; connecting explains how to install it (`RIFT_FDB_LIB` overrides the path).
+  API version 710 works with every 7.x client library.
+- **`fdb-ffi` is the only crate with `unsafe`.** It copies the workspace lints but sets
+  `unsafe_code = "deny"` (not `forbid`) so `ffi.rs` alone can allow it; every block has a
+  SAFETY comment. The driver itself keeps `forbid`.
+- **Every operation is one retried transaction on a blocking thread** (5 s timeout), using
+  `fdb_future_block_until_ready`. Scans are snapshot reads and report their read version.
+  Values are bytes only (`KvValue::String`); pattern scans are unsupported.
+- **Two new capabilities:** `KeyDirectories` (directory-layer listing and key counts) and
+  `KeyEncoding` (tuple layer decode/encode). The UI picks the range browser when
+  `key_directories()` exists and offers "Decode as Tuple" when `key_encoding()` exists.
+- **Directory counts scan the range** (10k keys per transaction, capped at 1,000,000).
+- **Tests and seed run in a Linux container** with the client library (`make fdb-test`,
+  `make dev-seed`, `dev/fdb/run.sh`), sharing the FoundationDB container's network so
+  `127.0.0.1:4500` works; CI installs the client `.deb`.
