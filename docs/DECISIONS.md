@@ -199,3 +199,21 @@ Format: date, decision, reason.
   in a popover from the column header. "Chart this column" opens a query tab with the
   `GROUP BY`.
 - **New conformance suite: `table_ttl_suite`** (set, read, remove a table TTL).
+
+## 2026-11-21 — M10
+
+- **Dashboards are document tabs** listed under DASHBOARDS in the SQL sidebar. Cards render
+  with the M9 chart code plus two new kinds: `Number` (latest value, change vs the previous
+  point, bare sparkline) and `BarList` (values sorted by count).
+- **Each card refreshes on its own timer:** a 1 s ticker refreshes cards whose interval has
+  elapsed since their last refresh. Interval, alert and removal are set from the card menu
+  and saved through `DashboardStore`.
+- **Alerts compare the latest value** with the rule and notify once when the rule starts
+  firing (badge turns red), through the OS notifier (`osascript` on macOS, `notify-send`
+  elsewhere).
+- **The time range trims points after aggregating** (dates outside the range are dropped).
+  The database still groups all time; a `WHERE` in `AggregateRequest` is the upgrade if
+  dashboards get slow.
+- **"Add chart" opens a query tab;** charts are built in a result's Chart tab and pinned.
+- **CI test job drops debug info and frees runner disk;** the GPUI debug build plus four
+  database services ran out of space.
