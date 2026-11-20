@@ -359,6 +359,30 @@ impl Session {
                             .child(ui::icon("chevron-down", 14., theme::FAINT)),
                     ),
             )
+            .when(self.conn.edit_rows().is_none(), |d| {
+                let engine = self
+                    .conn
+                    .info()
+                    .server_version
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("this database")
+                    .to_owned();
+                d.child(
+                    div()
+                        .flex()
+                        .gap(px(8.))
+                        .p(px(10.))
+                        .rounded(px(6.))
+                        .bg(c(theme::EDITED_BG))
+                        .text_size(px(12.5))
+                        .text_color(c(theme::EDITED_TEXT))
+                        .child(ui::icon("info", 13., theme::EDITED_TEXT))
+                        .child(div().flex_1().min_w_0().child(SharedString::from(format!(
+                            "Read-mostly: cell edits are off for {engine}. Inserts still work."
+                        )))),
+                )
+            })
             .child(
                 div()
                     .flex()
