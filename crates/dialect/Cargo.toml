@@ -12,3 +12,6 @@ workspace = true
 
 [dependencies]
 types = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

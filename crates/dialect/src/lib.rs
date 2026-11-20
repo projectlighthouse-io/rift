@@ -2,6 +2,7 @@
 //! chart `GROUP BY` builders and safe-mode statement checks.
 
 mod dialect;
+pub mod edits;
 pub mod rows;
 
 pub use dialect::Dialect;
