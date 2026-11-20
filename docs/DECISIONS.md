@@ -61,3 +61,16 @@ Format: date, decision, reason.
   and the generated SQL is what the status bar and snapshots show. Escaping is per dialect.
 - **Driver integration tests skip when Docker is unreachable,** unless `RIFT_REQUIRE_DOCKER=1`.
   Ports come from `RIFT_PG_PORT` etc.
+- **Custom grid on GPUI `uniform_list`** instead of `gpui-component`'s `DataTable`: the design
+  needs per-cell edit states, a row-number column, header name + type + key icons and a focus
+  ring; owning ~300 lines is simpler than restyling the component. 100k rows scroll with no
+  frame over 16 ms in release (`RIFT_DEV_AUTOSCROLL=1 RIFT_FRAME_LOG=1`, see below).
+- **Icons are the mockups' own SVGs,** extracted from `design/html` into `crates/app/assets/icons`
+  and served under `rift/`. Other paths fall back to `gpui-kit-assets`.
+- **Source Serif 4 is bundled as static TTFs** (Regular, Italic, Semibold, Bold, OFL). Adobe ships
+  no static Medium (500), so 500 renders with the nearest weight.
+- **Mono font:** first installed of SF Mono, Menlo, JetBrains Mono, Consolas, DejaVu Sans Mono.
+- **Window keeps the native title bar;** the 1440×900 design is the content area below it.
+- **Dev switches:** `RIFT_DEV_QUERY` opens a result tab with that SQL at startup;
+  `RIFT_DEV_AUTOSCROLL=1` scrolls every row one step per frame; `RIFT_FRAME_LOG=1` logs slow
+  frames in release builds (debug builds always do).
