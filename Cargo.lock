@@ -196,6 +196,7 @@ dependencies = [
  "dialect",
  "futures",
  "gpui-component",
+ "gpui-kit-assets",
  "gpui-pre",
  "gpui-pre-platform",
  "registry",

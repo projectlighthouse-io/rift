@@ -39,6 +39,7 @@ chrono = { version = "0.4.45", features = ["serde"] }
 futures = "0.3.34"
 gpui = { package = "gpui-pre", version = "=0.3.12" }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
+gpui-kit-assets = "=0.10.0"
 gpui-component = { version = "=0.10.0", features = ["tree-sitter-sql"] }
 rust_decimal = { version = "1.43.0", features = ["serde-str"] }
 serde = { version = "1.0.229", features = ["derive"] }
