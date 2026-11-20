@@ -236,3 +236,16 @@ Format: date, decision, reason.
 - **Tests and seed run in a Linux container** with the client library (`make fdb-test`,
   `make dev-seed`, `dev/fdb/run.sh`), sharing the FoundationDB container's network so
   `127.0.0.1:4500` works; CI installs the client `.deb`.
+
+## 2026-11-21 — M12
+
+- **The palette searches a snapshot** taken when it opens: tables and views of every open
+  session, their dashboards, the last 200 history entries of open connections, and "Connect to"
+  for saved connections that are not open. Functions and enums are left out (they do not open
+  as tables).
+- **Matching is a case-insensitive substring;** names that start with the query rank first,
+  then shorter names. 10,000 objects search in well under a frame (unit test); at most 50
+  results render.
+- **⌘K is a global action on the workspace root,** which takes focus back when the
+  connections screen (and its focused search box) goes away, so the shortcut keeps working.
+- **⌘↵ opens a table in a new tab** even when one is already open.
