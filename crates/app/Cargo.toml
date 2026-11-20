@@ -20,6 +20,7 @@ dialect = { workspace = true }
 anyhow = { workspace = true }
 dirs = { workspace = true }
 futures = { workspace = true }
+serde_json = { workspace = true }
 gpui = { workspace = true }
 gpui-component = { workspace = true }
 gpui_platform = { workspace = true }
