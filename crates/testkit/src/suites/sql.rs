@@ -446,3 +446,28 @@ pub async fn backup_suite(conn: &dyn Connection, dest: &std::path::Path) {
         .expect("backup runs");
     assert!(report.bytes > 0, "backup is not empty");
 }
+
+/// [`traits::TableTtl`]: set, read back and remove a table TTL. `table` needs a `DateTime`
+/// column named `ts`.
+pub async fn table_ttl_suite(conn: &dyn Connection, table: &TableRef) {
+    let ttl = conn.table_ttl().expect("table_ttl");
+    let rule = types::TtlRule {
+        column: None,
+        expression: "ts + INTERVAL 30 DAY".into(),
+    };
+    ttl.set_table_ttl(table, Some(&rule))
+        .await
+        .expect("set ttl");
+    let rules = ttl.ttl_rules(table).await.expect("read ttl");
+    assert!(
+        rules
+            .iter()
+            .any(|r| r.column.is_none() && r.expression.contains("ts")),
+        "rules: {rules:?}"
+    );
+    ttl.set_table_ttl(table, None).await.expect("remove ttl");
+    assert!(
+        ttl.ttl_rules(table).await.expect("read ttl").is_empty(),
+        "TTL removed"
+    );
+}

@@ -12,7 +12,7 @@ pub use kv::{
 pub use sql::{
     SqlFixture, aggregate_suite, backup_suite, browse_suite, column_stats_suite, describe_suite,
     edit_rows_suite, edit_schema_suite, explain_suite, query_suite, run_sql_suites,
-    sql_transactions_suite,
+    sql_transactions_suite, table_ttl_suite,
 };
 pub use stores::{
     connection_store_suite, dashboard_store_suite, history_store_suite, secret_store_suite,
