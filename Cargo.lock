@@ -520,6 +520,7 @@ dependencies = [
  "postgres-driver",
  "redis-driver",
  "sqlite-driver",
+ "testkit",
  "traits",
  "types",
 ]
@@ -645,6 +646,9 @@ dependencies = [
 name = "testkit"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "futures",
+ "tokio-util",
  "traits",
  "types",
 ]
