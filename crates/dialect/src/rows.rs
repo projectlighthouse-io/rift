@@ -106,13 +106,22 @@ mod tests {
         };
         assert_eq!(
             super::select_rows(Dialect::Postgres, &table, &request),
-            "SELECT * FROM \"public\".\"orders\" WHERE \"status\" <> 'o''k' AND \"notes\" IS NULL \
-             ORDER BY \"id\" DESC LIMIT 50 OFFSET 50"
+            "SELECT * FROM public.orders WHERE status <> 'o''k' AND notes IS NULL \
+             ORDER BY id DESC LIMIT 50 OFFSET 50"
         );
         assert_eq!(
             super::count_rows(Dialect::MySql, &table, &request),
-            "SELECT count(*) FROM `public`.`orders` WHERE `status` <> 'o''k' AND `notes` IS NULL"
+            "SELECT count(*) FROM public.orders WHERE status <> 'o''k' AND notes IS NULL"
         );
+    }
+
+    #[test]
+    fn quotes_only_when_needed() {
+        assert_eq!(Dialect::Postgres.ident("orders"), "orders");
+        assert_eq!(Dialect::Postgres.ident("user"), "\"user\"");
+        assert_eq!(Dialect::Postgres.ident("Mixed"), "\"Mixed\"");
+        assert_eq!(Dialect::MySql.ident("my col"), "`my col`");
+        assert_eq!(Dialect::Postgres.ident("a\"b"), "\"a\"\"b\"");
     }
 
     #[test]

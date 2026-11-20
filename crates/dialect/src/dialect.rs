@@ -17,9 +17,13 @@ pub enum Dialect {
 }
 
 impl Dialect {
-    /// Quotes an identifier: `"name"` or `` `name` `` for MySQL and ClickHouse.
+    /// Quotes an identifier when needed: `"Name"` or `` `my col` `` for MySQL and ClickHouse.
+    /// Lower-case names that are not keywords are left bare, so generated SQL reads naturally.
     #[must_use]
     pub fn ident(self, name: &str) -> String {
+        if is_plain_identifier(name) {
+            return name.to_owned();
+        }
         match self {
             Dialect::MySql | Dialect::ClickHouse => format!("`{}`", name.replace('`', "``")),
             _ => format!("\"{}\"", name.replace('"', "\"\"")),
@@ -107,4 +111,119 @@ impl Dialect {
             format!(" LIMIT {limit} OFFSET {offset}")
         }
     }
+}
+
+/// Words that must be quoted as identifiers in at least one supported engine.
+const KEYWORDS: &[&str] = &[
+    "all",
+    "alter",
+    "analyze",
+    "and",
+    "any",
+    "array",
+    "as",
+    "asc",
+    "between",
+    "both",
+    "by",
+    "case",
+    "cast",
+    "check",
+    "collate",
+    "column",
+    "constraint",
+    "create",
+    "cross",
+    "current_date",
+    "current_time",
+    "current_timestamp",
+    "current_user",
+    "database",
+    "default",
+    "delete",
+    "desc",
+    "distinct",
+    "do",
+    "drop",
+    "else",
+    "end",
+    "except",
+    "exists",
+    "false",
+    "fetch",
+    "for",
+    "foreign",
+    "from",
+    "full",
+    "grant",
+    "group",
+    "having",
+    "if",
+    "in",
+    "index",
+    "inner",
+    "insert",
+    "intersect",
+    "interval",
+    "into",
+    "is",
+    "join",
+    "key",
+    "keys",
+    "leading",
+    "left",
+    "like",
+    "limit",
+    "localtime",
+    "localtimestamp",
+    "match",
+    "natural",
+    "not",
+    "null",
+    "offset",
+    "on",
+    "only",
+    "or",
+    "order",
+    "outer",
+    "over",
+    "partition",
+    "primary",
+    "range",
+    "references",
+    "returning",
+    "right",
+    "row",
+    "rows",
+    "schema",
+    "select",
+    "session_user",
+    "set",
+    "some",
+    "table",
+    "then",
+    "to",
+    "trailing",
+    "true",
+    "union",
+    "unique",
+    "update",
+    "user",
+    "using",
+    "values",
+    "view",
+    "when",
+    "where",
+    "window",
+    "with",
+];
+
+/// `[a-z_][a-z0-9_]*` and not a keyword.
+fn is_plain_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars
+        .next()
+        .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        && !KEYWORDS.contains(&name)
 }

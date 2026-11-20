@@ -2,7 +2,7 @@
 source: crates/dialect/src/edits.rs
 expression: "render(Dialect::MySql)"
 ---
-UPDATE `public`.`orders` SET `status` = 'shipped', `notes` = 'it''s fragile' WHERE `id` = 1042;
-INSERT INTO `public`.`orders` (`customer_id`, `total`, `shipped_at`) VALUES (130, '45.00', NULL);
-DELETE FROM `public`.`orders` WHERE `id` = 1045;
-INSERT INTO `public`.`orders` () VALUES ()
+UPDATE public.orders SET status = 'shipped', notes = 'it''s fragile' WHERE id = 1042;
+INSERT INTO public.orders (customer_id, total, shipped_at) VALUES (130, '45.00', NULL);
+DELETE FROM public.orders WHERE id = 1045;
+INSERT INTO public.orders () VALUES ()

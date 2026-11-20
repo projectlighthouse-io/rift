@@ -1,0 +1,11 @@
+---
+source: crates/dialect/src/ddl.rs
+expression: "render(Dialect::Sqlite)"
+---
+ALTER TABLE public.orders ADD COLUMN gift_message text;
+ALTER TABLE public.orders ADD COLUMN "Priority" int DEFAULT 0 NOT NULL;
+ALTER TABLE public.orders DROP COLUMN notes;
+ALTER TABLE public.orders RENAME COLUMN total TO "order";
+CREATE INDEX orders_status_created_idx ON public.orders (status, created_at DESC);
+DROP INDEX orders_customer_id_idx;
+DELETE FROM public.orders
