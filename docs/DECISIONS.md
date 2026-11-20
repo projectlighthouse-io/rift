@@ -123,3 +123,23 @@ Format: date, decision, reason.
   rebuilding the table, so the hint would promise something Rift does not do.
 - **sqlx statement cache disabled** for Postgres: after `ALTER TABLE`, cached `SELECT *`
   metadata returned stale columns (caught by the EditSchema conformance suite).
+
+## 2026-11-20 — M6
+
+- **Editor is gpui-component's `EditorState`** with Rift's own `InputHighlighter`
+  (`sql_syntax.rs`): a small SQL tokenizer coloured with the design's palette (keywords
+  `#7c3aed`, functions `#0369a1`, strings `#15803d`, numbers `#b45309`, comments faint
+  italic). No tree-sitter theme to fight.
+- **Current statement** is a `RangeDecoration` fill (`#f6f4f1`) from `dialect::split`. It covers
+  the statement's text runs rather than full-width lines (the editor's decoration model).
+  The decoration is only replaced when the range changes: replacing it notifies the editor,
+  which re-runs the observer (an infinite loop otherwise).
+- **Statement splitting lives in `dialect::split`** (quotes, `$tag$` strings, `--` and `/* */`
+  comments, leading comments trimmed) so every driver sees the same statements.
+- **Run all stops at the first failing statement**; each row-returning statement gets a result
+  tab, everything else is logged in Messages. Every statement is written to `HistoryStore`.
+- **Autocomplete** uses `CompletionProvider` fed with tables, views, functions and the columns
+  of up to 200 objects in the default schema, plus SQL keywords.
+- **Copy as CSV / JSON / INSERT** and **Export** (CSV via a save dialog) use `export.rs`.
+- **Decimal and float cells group thousands** (`1,842.50`), as in the design; integers do not
+  (ids stay `1041`).
