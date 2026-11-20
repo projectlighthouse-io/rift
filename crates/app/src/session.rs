@@ -1,0 +1,516 @@
+//! One open connection: schema sidebar, document tabs and the active document.
+
+use std::sync::Arc;
+
+use gpui::prelude::*;
+use gpui::{
+    AnyView, Context, Entity, FontWeight, SharedString, Subscription, Task, Window, div, px,
+};
+use gpui_component::input::{Input, InputEvent, InputState};
+use traits::Connection;
+use types::{DbObject, Error, ObjectKind, SchemaName, TableRef, Tag};
+
+use crate::result_view::ResultView;
+use crate::table_view::TableView;
+use crate::theme::{self, c};
+use crate::{runtime, ui};
+
+/// Sidebar sections, in order.
+const SECTIONS: [(ObjectKind, &str); 4] = [
+    (ObjectKind::Table, "Tables"),
+    (ObjectKind::View, "Views"),
+    (ObjectKind::Function, "Functions"),
+    (ObjectKind::Enum, "Enums"),
+];
+
+/// An open document tab.
+pub(crate) enum Doc {
+    Table(Entity<TableView>),
+    Result(Entity<ResultView>),
+}
+
+impl Doc {
+    fn view(&self) -> AnyView {
+        match self {
+            Doc::Table(v) => v.clone().into(),
+            Doc::Result(v) => v.clone().into(),
+        }
+    }
+}
+
+/// A live connection and its workspace.
+pub(crate) struct Session {
+    pub(crate) name: SharedString,
+    pub(crate) tag: Tag,
+    pub(crate) read_only: bool,
+    pub(crate) conn: Arc<dyn Connection>,
+    schema: Option<SchemaName>,
+    objects: Vec<DbObject>,
+    collapsed: Vec<ObjectKind>,
+    filter: Entity<InputState>,
+    docs: Vec<Doc>,
+    active: Option<usize>,
+    error: Option<String>,
+    _loading: Option<Task<()>>,
+    _subscriptions: Vec<Subscription>,
+}
+
+impl Session {
+    pub(crate) fn new(
+        name: SharedString,
+        tag: Tag,
+        read_only: bool,
+        conn: Arc<dyn Connection>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let filter = cx.new(|cx| InputState::new(window, cx).placeholder("Filter tables"));
+        let subscription = cx.subscribe_in(&filter, window, |_, _, event: &InputEvent, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
+        let mut session = Self {
+            name,
+            tag,
+            read_only,
+            conn,
+            schema: None,
+            objects: Vec::new(),
+            collapsed: vec![ObjectKind::View, ObjectKind::Function, ObjectKind::Enum],
+            filter,
+            docs: Vec::new(),
+            active: None,
+            error: None,
+            _loading: None,
+            _subscriptions: vec![subscription],
+        };
+        session.refresh(cx);
+        session
+    }
+
+    /// The engine label shown on the connection tab, e.g. `PostgreSQL 16`.
+    pub(crate) fn engine(&self) -> SharedString {
+        // `PostgreSQL 16.4` → `PostgreSQL 16`.
+        let version = &self.conn.info().server_version;
+        match version.rsplit_once(' ') {
+            Some((name, number)) => {
+                format!("{name} {}", number.split('.').next().unwrap_or(number)).into()
+            }
+            None => version.clone().into(),
+        }
+    }
+
+    /// Reloads schemas and objects.
+    pub(crate) fn refresh(&mut self, cx: &mut Context<Self>) {
+        let conn = self.conn.clone();
+        let wanted = self.schema.clone();
+        self._loading = Some(runtime::spawn_db(
+            cx,
+            async move {
+                let browse = conn.browse().ok_or_else(|| Error::unsupported("browse"))?;
+                let schema = match wanted {
+                    Some(s) => Some(s),
+                    None => browse.default_schema().await?,
+                };
+                let objects = match &schema {
+                    Some(s) => browse.objects(s).await?,
+                    None => Vec::new(),
+                };
+                Ok::<_, Error>((schema, objects))
+            },
+            |this, result, cx| {
+                match result {
+                    Ok((schema, objects)) => {
+                        this.schema = schema;
+                        this.objects = objects;
+                        this.error = None;
+                    }
+                    Err(e) => this.error = Some(e.to_string()),
+                }
+                cx.notify();
+            },
+        ));
+    }
+
+    /// Opens (or focuses) a table document.
+    pub(crate) fn open_table(&mut self, table: TableRef, cx: &mut Context<Self>) {
+        let existing = self.docs.iter().position(|d| match d {
+            Doc::Table(v) => v.read(cx).table == table,
+            Doc::Result(_) => false,
+        });
+        let ix = existing.unwrap_or_else(|| {
+            let conn = self.conn.clone();
+            self.docs
+                .push(Doc::Table(cx.new(|cx| TableView::new(conn, table, cx))));
+            self.docs.len() - 1
+        });
+        self.active = Some(ix);
+        cx.notify();
+    }
+
+    /// Opens a result tab running `sql`.
+    pub(crate) fn open_query(&mut self, sql: String, cx: &mut Context<Self>) {
+        let conn = self.conn.clone();
+        let title: SharedString = format!("Query {}", self.docs.len() + 1).into();
+        self.docs.push(Doc::Result(
+            cx.new(|cx| ResultView::new(conn, title, sql, cx)),
+        ));
+        self.active = Some(self.docs.len() - 1);
+        cx.notify();
+    }
+
+    fn close_doc(&mut self, ix: usize, cx: &mut Context<Self>) {
+        if ix < self.docs.len() {
+            if let Doc::Result(v) = &self.docs[ix] {
+                v.read(cx).cancel();
+            }
+            self.docs.remove(ix);
+            self.active = match self.active {
+                _ if self.docs.is_empty() => None,
+                Some(a) if a >= ix && a > 0 => Some(a - 1),
+                other => other,
+            };
+            cx.notify();
+        }
+    }
+
+    fn selected_table(&self, cx: &Context<Self>) -> Option<TableRef> {
+        match self.docs.get(self.active?)? {
+            Doc::Table(v) => Some(v.read(cx).table.clone()),
+            Doc::Result(_) => None,
+        }
+    }
+
+    fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let mono = theme::mono(cx);
+        let filter = self.filter.read(cx).value().to_lowercase();
+        let selected = self.selected_table(cx);
+        let database = self.conn.info().database.clone().unwrap_or_default();
+        let schema = self
+            .schema
+            .as_ref()
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+
+        let header = div()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .p(px(12.))
+            .border_b_1()
+            .border_color(c(theme::LINE))
+            .child(
+                div()
+                    .text_size(px(11.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(c(theme::FAINT))
+                    .child("DATABASE · SCHEMA"),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .h(px(32.))
+                    .px(px(10.))
+                    .rounded(px(6.))
+                    .bg(c(theme::RAISED))
+                    .border_1()
+                    .border_color(c(theme::LINE))
+                    .text_size(px(13.))
+                    .child(ui::icon("database", 14., theme::ACCENT_TEXT))
+                    .child(
+                        div()
+                            .font_family(mono.clone())
+                            .text_size(px(12.5))
+                            .child(SharedString::from(database)),
+                    )
+                    .child(div().text_color(c(theme::FAINT)).child("/"))
+                    .child(
+                        div()
+                            .font_family(mono.clone())
+                            .text_size(px(12.5))
+                            .child(SharedString::from(schema)),
+                    )
+                    .child(
+                        div()
+                            .ml_auto()
+                            .child(ui::icon("chevron-down", 14., theme::FAINT)),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .h(px(30.))
+                    .pl(px(9.))
+                    .pr(px(4.))
+                    .rounded(px(6.))
+                    .bg(c(theme::BG))
+                    .border_1()
+                    .border_color(c(theme::LINE))
+                    .child(ui::icon("search", 13., theme::FAINT))
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_size(px(13.))
+                            .child(Input::new(&self.filter).appearance(false)),
+                    ),
+            );
+
+        let mut nav = div()
+            .id("objects")
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .gap(px(2.))
+            .px(px(6.))
+            .py(px(8.));
+        for (kind, label) in SECTIONS {
+            let items: Vec<&DbObject> = self
+                .objects
+                .iter()
+                .filter(|o| {
+                    let shown = if kind == ObjectKind::View {
+                        matches!(o.kind, ObjectKind::View | ObjectKind::MaterializedView)
+                    } else {
+                        o.kind == kind
+                    };
+                    shown && o.table.name.as_str().to_lowercase().contains(&filter)
+                })
+                .collect();
+            let open = !self.collapsed.contains(&kind);
+            nav = nav.child(
+                div()
+                    .id(SharedString::from(format!("section-{label}")))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .h(px(28.))
+                    .px(px(8.))
+                    .cursor_pointer()
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(c(theme::MUTED))
+                    .child(ui::icon(
+                        if open {
+                            "chevron-down"
+                        } else {
+                            "chevron-right"
+                        },
+                        13.,
+                        theme::MUTED,
+                    ))
+                    .child(label.to_uppercase())
+                    .child(
+                        div()
+                            .ml_auto()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(c(theme::FAINT))
+                            .child(SharedString::from(items.len().to_string())),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        match this.collapsed.iter().position(|k| *k == kind) {
+                            Some(i) => {
+                                this.collapsed.remove(i);
+                            }
+                            None => this.collapsed.push(kind),
+                        }
+                        cx.notify();
+                    })),
+            );
+            if !open {
+                continue;
+            }
+            for object in items {
+                let table = object.table.clone();
+                let is_selected = selected.as_ref() == Some(&object.table);
+                let openable = matches!(
+                    object.kind,
+                    ObjectKind::Table | ObjectKind::View | ObjectKind::MaterializedView
+                );
+                let row = div()
+                    .id(SharedString::from(format!("obj-{}", object.table)))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .h(px(28.))
+                    .pl(px(26.))
+                    .pr(px(10.))
+                    .rounded(px(5.))
+                    .cursor_pointer()
+                    .text_color(c(if is_selected {
+                        theme::TEXT
+                    } else {
+                        theme::MUTED
+                    }))
+                    .when(is_selected, |d| d.bg(c(theme::SELECTION)))
+                    .hover(|d| d.bg(c(theme::SELECTION)))
+                    .child(ui::icon(
+                        if openable { "table" } else { "code" },
+                        14.,
+                        if is_selected {
+                            theme::ACCENT_TEXT
+                        } else {
+                            theme::FAINT
+                        },
+                    ))
+                    .child(
+                        div()
+                            .font_family(mono.clone())
+                            .text_size(px(12.5))
+                            .child(SharedString::from(object.table.name.to_string())),
+                    );
+                nav = nav.child(if openable {
+                    row.on_click(
+                        cx.listener(move |this, _, _, cx| this.open_table(table.clone(), cx)),
+                    )
+                } else {
+                    row
+                });
+            }
+        }
+
+        let footer = div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(px(8.))
+            .px(px(12.))
+            .py(px(8.))
+            .border_t_1()
+            .border_color(c(theme::LINE))
+            .text_size(px(12.))
+            .text_color(c(theme::FAINT))
+            .child(
+                div()
+                    .size(px(7.))
+                    .rounded(px(2.))
+                    .bg(c(if self.error.is_some() {
+                        theme::DELETED_TEXT
+                    } else {
+                        theme::tag_color(Tag::Green)
+                    })),
+            )
+            .child(SharedString::from(match &self.error {
+                Some(e) => e.clone(),
+                None => format!("Connected · {}", self.conn.info().address),
+            }))
+            .child(
+                div().ml_auto().child(
+                    ui::icon_button("refresh-schema", "refresh", 24., 14.)
+                        .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                ),
+            );
+
+        div()
+            .flex()
+            .flex_col()
+            .flex_none()
+            .w(px(249.))
+            .h_full()
+            .bg(c(theme::PANEL))
+            .border_r_1()
+            .border_color(c(theme::LINE))
+            .child(header)
+            .child(nav)
+            .child(footer)
+    }
+
+    fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let mono = theme::mono(cx);
+        div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(px(2.))
+            .px(px(8.))
+            .h(px(37.))
+            .bg(c(theme::PANEL))
+            .border_b_1()
+            .border_color(c(theme::LINE))
+            .children(self.docs.iter().enumerate().map(|(ix, doc)| {
+                let active = self.active == Some(ix);
+                let (icon, label, is_table) = match doc {
+                    Doc::Table(v) => ("table", v.read(cx).table.name.to_string(), true),
+                    Doc::Result(v) => ("code", v.read(cx).title.to_string(), false),
+                };
+                div()
+                    .id(("doc-tab", ix))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .h(px(36.))
+                    .pl(px(12.))
+                    .pr(px(6.))
+                    .cursor_pointer()
+                    .border_b_2()
+                    .border_color(if active {
+                        c(theme::ACCENT)
+                    } else {
+                        gpui::transparent_black().into()
+                    })
+                    .bg(if active {
+                        c(theme::BG)
+                    } else {
+                        gpui::transparent_black().into()
+                    })
+                    .text_color(c(if active { theme::TEXT } else { theme::MUTED }))
+                    .child(ui::icon(
+                        icon,
+                        14.,
+                        if active {
+                            theme::ACCENT_TEXT
+                        } else {
+                            theme::FAINT
+                        },
+                    ))
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .when(is_table, |d| d.font_family(mono.clone()))
+                            .child(SharedString::from(label)),
+                    )
+                    .child(
+                        ui::icon_button(("close-doc", ix), "close", 22., 15.).on_click(
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.close_doc(ix, cx);
+                            }),
+                        ),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.active = Some(ix);
+                        cx.notify();
+                    }))
+            }))
+            .child(ui::icon_button("new-query", "plus", 28., 15.))
+    }
+}
+
+impl Render for Session {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let content = self.active.and_then(|ix| self.docs.get(ix)).map(Doc::view);
+        div()
+            .flex()
+            .size_full()
+            .min_h_0()
+            .child(self.render_sidebar(cx))
+            .child(
+                div()
+                    .relative()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .child(ui::dot_grid())
+                    .child(self.render_tabs(cx))
+                    .child(div().flex_1().min_h_0().children(content)),
+            )
+    }
+}
