@@ -23,3 +23,19 @@ Format: date, decision, reason.
   here; M0 stubs have none.
 - **Host ports overridable** via `RIFT_PG_PORT` / `RIFT_REDIS_PORT` (defaults 5432 / 6379) for
   machines where another Postgres or Redis already holds the default port.
+
+## 2026-11-20 — M1
+
+- **Futures are `futures::future::BoxFuture`,** not `async fn` in traits: capability traits
+  must be object safe (`&dyn Browse`).
+- **`Query::execute` runs one statement.** Splitting scripts into statements happens in
+  `dialect` (via `sqlparser`) so every driver gets the same behaviour.
+- **Rows stream as `BoxStream<Result<Vec<Row>>>`** of up to `PAGE_SIZE` (500) rows; drivers
+  feed it from a bounded channel of 4 pages.
+- **`Transactions::atomic(&[TxOp])`** covers both families: SQL statements or key writes.
+  Unsupported ops fail before anything is written.
+- **Stores are synchronous.** They are local SQLite; the app calls them off the UI thread.
+- **Conformance fixture:** a 3-row table `(id, name, score)` the driver harness creates. SQL
+  suites restore it after mutating, so all suites share one table.
+- **`registry` feature `fake`** adds `testkit`'s `FakeSqlFactory` and `FakeKvFactory`; CI runs
+  `cargo test -p registry --features fake`.
