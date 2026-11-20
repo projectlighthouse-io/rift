@@ -74,3 +74,23 @@ Format: date, decision, reason.
 - **Dev switches:** `RIFT_DEV_QUERY` opens a result tab with that SQL at startup;
   `RIFT_DEV_AUTOSCROLL=1` scrolls every row one step per frame; `RIFT_FRAME_LOG=1` logs slow
   frames in release builds (debug builds always do).
+
+## 2026-11-20 — M3
+
+- **rusqlite 0.40** (not 0.43): `refinery` 0.10 supports rusqlite up to 0.40. The SQLite driver
+  will use the same version so only one `libsqlite3-sys` is linked.
+- **App records are JSON bodies** in SQLite with a few indexed columns (`store`), so new record
+  fields need no migration. Passwords go only to the OS keychain (`keyring` v1 API, service
+  `io.projectlighthouse.rift`, account = connection id).
+- **Connections keep creation order;** the start screen groups them Local, Staging, Production,
+  then other groups alphabetically.
+- **Connection form layout is generic:** driver fields two per row, a `Host` followed by a `Port`
+  share a row with a 96px port, `Group` fills the last slot, `advanced` fields go under
+  "More options" with TLS, safe mode and SSH.
+- **Shortcuts use `cmd-` on macOS and `ctrl-` elsewhere** (`cmd!` macro); this GPUI has no
+  `secondary-` modifier.
+- **Delete lives in the Edit dialog** (⌘E, then Delete) rather than a separate shortcut.
+- **Inputs:** `ui::input(state, px)` sizes gpui-component's `Input` to the design's text size
+  (it renders text at 0.875 × its size) and the wrapper adds 2px so text sits 10px in.
+- **UI checks are driven by real input** (CGEvent clicks and key codes) against the running app;
+  helpers live in the untracked `.tinker/`.
