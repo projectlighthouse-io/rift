@@ -19,6 +19,7 @@ sqlite-driver = { workspace = true, optional = true }
 clickhouse-driver = { workspace = true, optional = true }
 redis-driver = { workspace = true, optional = true }
 foundationdb-driver = { workspace = true, optional = true }
+testkit = { workspace = true, optional = true }
 
 [features]
 default = ["postgres", "mysql", "sqlite", "clickhouse", "redis", "foundationdb"]
@@ -28,3 +29,4 @@ sqlite = ["dep:sqlite-driver"]
 clickhouse = ["dep:clickhouse-driver"]
 redis = ["dep:redis-driver"]
 foundationdb = ["dep:foundationdb-driver"]
+fake = ["dep:testkit"]
