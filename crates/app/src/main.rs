@@ -1,5 +1,6 @@
 //! Rift: a fast, native, cross-platform database client.
 
+mod about;
 mod actions;
 mod assets;
 mod chart;
@@ -63,6 +64,7 @@ fn main() -> anyhow::Result<()> {
             gpui_component::init(cx);
             theme::init(cx);
             actions::bind(cx);
+            about::init(cx);
             if let Err(e) = state::init(cx) {
                 tracing::error!("opening app database: {e:#}");
                 cx.quit();
