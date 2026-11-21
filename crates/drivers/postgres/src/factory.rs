@@ -98,8 +98,9 @@ impl DriverFactory for PgFactory {
                 .fetch_one(&pool)
                 .await
                 .map_err(error::map)?;
+            // `16.4 (Debian 16.4-1)` → `16`: since 10, the first number is the major version.
             let major = version
-                .split_whitespace()
+                .split(|c: char| c == '.' || c.is_whitespace())
                 .next()
                 .unwrap_or(&version)
                 .to_owned();
