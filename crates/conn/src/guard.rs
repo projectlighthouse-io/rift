@@ -11,12 +11,12 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use tokio_util::sync::CancellationToken;
 use traits::{
-    Aggregate, Browse, ColumnStats, Connection, Describe, Explain, KeyDirectories, KeyEncoding,
-    KeyExpiry, KeyValue, MemoryStats, Query, StatementOutput, TableTtl,
+    Aggregate, Backup, Browse, ColumnStats, Connection, Describe, Explain, KeyDirectories,
+    KeyEncoding, KeyExpiry, KeyValue, MemoryStats, Query, StatementOutput, TableTtl,
 };
 use types::{
-    AggregateRequest, ChartData, ChartSource, ConnectionInfo, Error, ExplainPlan, KeyBytes,
-    KeyPage, KeyScan, KvValue, TableRef, TtlRule,
+    AggregateRequest, BackupReport, ChartData, ChartSource, ConnectionInfo, Error, ExplainPlan,
+    KeyBytes, KeyPage, KeyScan, KvValue, TableRef, TtlRule,
 };
 
 fn refused(what: &str) -> Error {
@@ -110,8 +110,11 @@ impl Connection for ReadOnlyConnection {
     fn table_ttl(&self) -> Option<&dyn TableTtl> {
         self.inner.table_ttl().map(|_| self as &dyn TableTtl)
     }
-    // edit_rows, edit_schema, transactions and backup stay `None`: they only write (backup
-    // shares its trait with restore).
+
+    fn backup(&self) -> Option<&dyn Backup> {
+        self.inner.backup().map(|_| self as &dyn Backup)
+    }
+    // edit_rows, edit_schema and transactions stay `None`: they only write.
 }
 
 /// The wrapped capability; present because the wrapper only exposes what `inner` has.
@@ -215,5 +218,23 @@ impl TableTtl for ReadOnlyConnection {
         _: Option<&'a TtlRule>,
     ) -> BoxFuture<'a, Result<(), Error>> {
         async { Err(refused("changing a table TTL")) }.boxed()
+    }
+}
+
+impl Backup for ReadOnlyConnection {
+    fn backup<'a>(
+        &'a self,
+        dest: &'a std::path::Path,
+        cancel: CancellationToken,
+    ) -> BoxFuture<'a, Result<BackupReport, Error>> {
+        async move { inner!(self.backup).backup(dest, cancel).await }.boxed()
+    }
+
+    fn restore<'a>(
+        &'a self,
+        _: &'a std::path::Path,
+        _: CancellationToken,
+    ) -> BoxFuture<'a, Result<(), Error>> {
+        async { Err(refused("restoring a backup")) }.boxed()
     }
 }

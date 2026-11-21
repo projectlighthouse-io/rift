@@ -15,7 +15,14 @@ fn read_only_sql_allows_reads_and_refuses_writes() {
     assert!(conn.edit_rows().is_none(), "row edits hidden");
     assert!(conn.edit_schema().is_none(), "schema edits hidden");
     assert!(conn.transactions().is_none(), "transactions hidden");
-    assert!(conn.backup().is_none(), "backup/restore hidden");
+    if let Some(backup) = conn.backup() {
+        let restored =
+            block_on(backup.restore(std::path::Path::new("x.sql"), CancellationToken::new()));
+        assert!(
+            matches!(restored, Err(Error::ReadOnly { .. })),
+            "restore refused"
+        );
+    }
     let query = conn.query().expect("query kept");
     let cancel = CancellationToken::new;
     for write in [
