@@ -21,7 +21,7 @@ use types::{
 
 fn refused(what: &str) -> Error {
     Error::ReadOnly {
-        reason: format!("this connection is read-only; {what} is blocked"),
+        reason: format!("{what} is blocked on this connection"),
     }
 }
 
