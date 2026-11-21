@@ -81,6 +81,63 @@ pub async fn run_sql_suites(conn: &dyn Connection, fx: &SqlFixture) {
     if conn.transactions().is_some() {
         sql_transactions_suite(conn, fx).await;
     }
+    if conn.backup().is_some() {
+        backup_suite(conn, fx).await;
+    }
+}
+
+/// Runs one statement and returns its rows (empty for statements without a result).
+async fn rows_of(conn: &dyn Connection, sql: &str) -> Vec<types::Row> {
+    match conn
+        .query()
+        .expect("query")
+        .execute(sql, CancellationToken::new())
+        .await
+    {
+        Ok(StatementOutput::Rows(mut stream)) => {
+            let mut rows = Vec::new();
+            while let Some(page) = stream.pages.next().await {
+                rows.extend(page.expect("page"));
+            }
+            rows
+        }
+        Ok(_) => Vec::new(),
+        Err(e) => panic!("{sql}: {e}"),
+    }
+}
+
+/// [`traits::Backup`]: a deleted row comes back after restoring a backup taken before.
+/// Skipped when the dump tool is missing, unless `RIFT_REQUIRE_TOOLS=1`.
+pub async fn backup_suite(conn: &dyn Connection, fx: &SqlFixture) {
+    let backup = conn.backup().expect("backup");
+    let probe = match &fx.table.schema {
+        Some(schema) => format!("{schema}.rift_backup_probe"),
+        None => "rift_backup_probe".to_owned(),
+    };
+    rows_of(conn, &format!("DROP TABLE IF EXISTS {probe}")).await;
+    rows_of(conn, &format!("CREATE TABLE {probe} (id integer)")).await;
+    rows_of(conn, &format!("INSERT INTO {probe} VALUES (7)")).await;
+    let path = std::env::temp_dir().join(format!("rift-backup-{}.sql", std::process::id()));
+    let report = match backup.backup(&path, CancellationToken::new()).await {
+        Err(types::Error::MissingDependency { message })
+            if std::env::var("RIFT_REQUIRE_TOOLS").is_err() =>
+        {
+            eprintln!("skipping backup suite: {message}");
+            rows_of(conn, &format!("DROP TABLE {probe}")).await;
+            return;
+        }
+        other => other.expect("backup"),
+    };
+    assert!(report.bytes > 0, "backup wrote nothing");
+    rows_of(conn, &format!("DELETE FROM {probe}")).await;
+    backup
+        .restore(&path, CancellationToken::new())
+        .await
+        .expect("restore");
+    let rows = rows_of(conn, &format!("SELECT id FROM {probe}")).await;
+    assert_eq!(rows.len(), 1, "restored row");
+    rows_of(conn, &format!("DROP TABLE {probe}")).await;
+    let _ = std::fs::remove_file(&path);
 }
 
 /// [`traits::Browse`]: schemas, objects, paging, filters, sorting and counts.
@@ -433,18 +490,6 @@ pub async fn sql_transactions_suite(conn: &dyn Connection, fx: &SqlFixture) {
         [1, 2, 3],
         "delete rolled back"
     );
-}
-
-/// [`traits::Backup`]: writes a non-empty backup. Not part of [`run_sql_suites`] because it
-/// needs the engine's dump tool installed.
-pub async fn backup_suite(conn: &dyn Connection, dest: &std::path::Path) {
-    let report = conn
-        .backup()
-        .expect("backup")
-        .backup(dest, CancellationToken::new())
-        .await
-        .expect("backup runs");
-    assert!(report.bytes > 0, "backup is not empty");
 }
 
 /// [`traits::TableTtl`]: set, read back and remove a table TTL. `table` needs a `DateTime`
