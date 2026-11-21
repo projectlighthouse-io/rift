@@ -72,3 +72,11 @@ services:
       FDB_PORT: "4500"
     ports:
       - "4500:4500"
+
+  ssh:
+    build: dev/ssh
+    ports:
+      - "2222:2222"
+    volumes:
+      # `make dev-up` generates this key pair (gitignored).
+      - ./dev/ssh/keys/id_ed25519.pub:/keys/authorized_keys:ro

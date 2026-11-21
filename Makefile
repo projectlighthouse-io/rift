@@ -2,6 +2,7 @@
 
 # Start local databases and wait until they are healthy.
 dev-up:
+	@mkdir -p dev/ssh/keys && test -f dev/ssh/keys/id_ed25519 || ssh-keygen -q -t ed25519 -N '' -f dev/ssh/keys/id_ed25519
 	docker compose up -d --wait
 	docker compose exec -T foundationdb sh -c 'fdbcli --exec "status minimal" --timeout 5 | grep -q available || fdbcli --exec "configure new single memory" --timeout 10'
 
