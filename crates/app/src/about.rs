@@ -1,18 +1,22 @@
 //! The About window and the app menu.
 
+use gpui::prelude::*;
 use gpui::{
     App, Bounds, Context, FontWeight, SharedString, Window, WindowBounds, WindowOptions, actions,
-    div, img, prelude::*, px, size,
+    div, img, px, size,
 };
 
 use crate::theme::{self, c};
 
-actions!(rift, [
-    /// Show the About window.
-    About,
-    /// Quit Rift.
-    Quit
-]);
+actions!(
+    rift,
+    [
+        /// Show the About window.
+        About,
+        /// Quit Rift.
+        Quit
+    ]
+);
 
 /// The app icon, rendered from `assets/icon/rift.svg` by `scripts/make-icon.sh`.
 const ICON: &[u8] = include_bytes!("../assets/icon/rift-256.png");
@@ -37,7 +41,10 @@ struct AboutView;
 
 impl Render for AboutView {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        let image = std::sync::Arc::new(gpui::Image::from_bytes(gpui::ImageFormat::Png, ICON.to_vec()));
+        let image = std::sync::Arc::new(gpui::Image::from_bytes(
+            gpui::ImageFormat::Png,
+            ICON.to_vec(),
+        ));
         div()
             .size_full()
             .flex()
@@ -49,14 +56,26 @@ impl Render for AboutView {
             .font_family(theme::SERIF)
             .text_color(c(theme::TEXT))
             .child(img(image).size(px(96.)))
-            .child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).child("Rift"))
+            .child(
+                div()
+                    .text_size(px(22.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("Rift"),
+            )
             .child(
                 div()
                     .text_size(px(13.))
                     .text_color(c(theme::MUTED))
-                    .child(SharedString::from(format!("Version {}", env!("CARGO_PKG_VERSION")))),
+                    .child(SharedString::from(format!(
+                        "Version {}",
+                        env!("CARGO_PKG_VERSION")
+                    ))),
             )
-            .child(div().text_size(px(13.)).child("Rift — a Project Lighthouse project"))
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .child("Rift — a Project Lighthouse project"),
+            )
     }
 }
 
@@ -80,12 +99,19 @@ mod tests {
     fn render_icon() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/icon");
         let svg = std::fs::read_to_string(dir.join("rift.svg")).expect("svg");
-        let tree = resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default()).expect("parse");
+        let tree =
+            resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default()).expect("parse");
         for size in [16u32, 32, 64, 128, 256, 512, 1024] {
             let mut pixmap = resvg::tiny_skia::Pixmap::new(size, size).expect("pixmap");
             let scale = size as f32 / 1024.0;
-            resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(scale, scale), &mut pixmap.as_mut());
-            pixmap.save_png(dir.join(format!("rift-{size}.png"))).expect("png");
+            resvg::render(
+                &tree,
+                resvg::tiny_skia::Transform::from_scale(scale, scale),
+                &mut pixmap.as_mut(),
+            );
+            pixmap
+                .save_png(dir.join(format!("rift-{size}.png")))
+                .expect("png");
         }
     }
 }
