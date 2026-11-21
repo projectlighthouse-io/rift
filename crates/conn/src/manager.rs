@@ -4,7 +4,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use traits::{ConnectDeps, Connection, ConnectionStore, DriverFactory, SecretStore};
-use types::{ConnConfig, ConnectionId, DriverInfo, Error, SavedConnection, Secret};
+use types::{ConnConfig, ConnectionId, DriverInfo, Error, SafeMode, SavedConnection, Secret};
+
+use crate::guard::ReadOnlyConnection;
 
 /// Owns the driver list, saved connections and secrets.
 pub struct ConnectionManager {
@@ -106,7 +108,12 @@ impl ConnectionManager {
             .iter()
             .find(|d| d.info().id == config.driver)
             .ok_or_else(|| Error::invalid(format!("unknown driver {}", config.driver)))?;
-        driver.connect(config, &self.deps).await
+        let conn = driver.connect(config, &self.deps).await?;
+        Ok(if config.safe_mode == SafeMode::ReadOnly {
+            Arc::new(ReadOnlyConnection::new(conn, config.driver.as_str()))
+        } else {
+            conn
+        })
     }
 
     /// Connects, pings and closes: the New connection dialog's Test button.

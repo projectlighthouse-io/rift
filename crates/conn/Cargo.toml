@@ -13,9 +13,12 @@ workspace = true
 [dependencies]
 types = { workspace = true }
 traits = { workspace = true }
+dialect = { workspace = true }
+tokio-util = { workspace = true }
 futures = { workspace = true }
 keyring = { workspace = true }
 
 [dev-dependencies]
+tokio-util = { workspace = true }
 testkit = { workspace = true }
 futures = { workspace = true }
