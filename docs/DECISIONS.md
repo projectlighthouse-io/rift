@@ -249,3 +249,34 @@ Format: date, decision, reason.
 - **⌘K is a global action on the workspace root,** which takes focus back when the
   connections screen (and its focused search box) goes away, so the shortcut keeps working.
 - **⌘↵ opens a table in a new tab** even when one is already open.
+
+## 2026-11-22 — M13
+
+- **Read-only is a wrapper in `conn`, not a driver flag alone.** `ReadOnlyConnection` hides
+  write-only capabilities (`EditRows`, `EditSchema`, `Transactions`), keeps reads of mixed ones
+  and refuses their writes (key writes, TTL changes, restores), and checks SQL with
+  `dialect::safety` before it reaches the server. Drivers that can also enforce read-only in
+  the database still do (Postgres `default_transaction_read_only`, MySQL `READ ONLY`, SQLite
+  read-only open, ClickHouse `readonly=2`).
+- **Only plain reads pass the SQL check:** queries without `INTO`, `EXPLAIN` of a read, `SHOW`,
+  `DESCRIBE`, `USE`. `SET` counts as a write (it could switch the server's read-only mode
+  off), `EXPLAIN ANALYZE` of a write counts as a write (it runs it), and anything sqlparser
+  cannot parse is blocked.
+- **Confirm writes and unbounded statements inline,** with a warning bar above the results
+  (or the table toolbar) instead of a modal: `UPDATE`/`DELETE` without `WHERE` always asks;
+  "Confirm writes" connections ask before any writing statement and before saving edits.
+- **Backup shells out where the engine has a standard tool** (`pg_dump`/`psql`,
+  `mysqldump`/`mysql`) and uses SQLite's online backup API. Tools are found on `PATH` and
+  the usual Homebrew/Postgres.app locations; a missing tool is `MissingDependency` with
+  install instructions. Postgres dumps use `--clean --if-exists`; restore runs in one
+  transaction and skips `SET transaction_timeout` lines newer `pg_dump` writes for older
+  servers. Read-only connections can back up but not restore.
+- **Backup and restore live in the command palette** ("Back up X…", "Restore X from
+  backup…"); restore always asks first.
+- **Table export pages through the whole table** (5,000 rows at a time, applied filters kept)
+  to CSV, JSON or SQL `INSERT`s in the connection's dialect. **CSV import** maps columns by
+  name (editable), previews 20 rows, and inserts through `EditRows` in batches of 500.
+- **SSH tunnels open in `conn`** (russh): the driver sees `127.0.0.1:<local port>`. Key
+  authentication only (configured key, else `~/.ssh/id_ed25519`/`id_rsa`). Host keys are
+  trusted on first use and recorded in `~/.ssh/known_hosts`; a changed key is refused.
+- **TLS** was already per driver (Disable / Prefer / Require).
