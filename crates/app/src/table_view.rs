@@ -13,8 +13,8 @@ use gpui::{
 use gpui_component::input::{InputEvent, InputState};
 use traits::Connection;
 use types::{
-    Column, ColumnValue, Error, Filter, FilterOp, Row, RowEdit, RowEditKind, RowsRequest, TableRef,
-    Value,
+    Column, ColumnValue, Error, Filter, FilterOp, Row, RowEdit, RowEditKind, RowsRequest, SafeMode,
+    TableRef, Value,
 };
 
 use crate::actions::SaveChanges;
@@ -109,6 +109,8 @@ pub(crate) struct TableView {
     structure: Option<Entity<StructureView>>,
     show_structure: bool,
     stats: Option<Entity<ColumnStatsView>>,
+    safe_mode: SafeMode,
+    confirm_save: bool,
     _tasks: Vec<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -162,6 +164,8 @@ impl TableView {
             structure: None,
             show_structure: false,
             stats: None,
+            safe_mode: SafeMode::Off,
+            confirm_save: false,
             _tasks: Vec::new(),
             _subscriptions: vec![subscription],
         };
@@ -474,7 +478,25 @@ impl TableView {
         edits
     }
 
+    pub(crate) fn set_safe_mode(&mut self, mode: SafeMode) {
+        self.safe_mode = mode;
+    }
+
+    /// Saves, first asking when the connection confirms writes.
     fn save(&mut self, cx: &mut Context<Self>) {
+        if self.pending.is_empty() || !self.editable() {
+            return;
+        }
+        if self.safe_mode == SafeMode::ConfirmWrites {
+            self.confirm_save = true;
+            cx.notify();
+            return;
+        }
+        self.save_now(cx);
+    }
+
+    fn save_now(&mut self, cx: &mut Context<Self>) {
+        self.confirm_save = false;
         if self.pending.is_empty() || !self.editable() {
             return;
         }
@@ -1141,6 +1163,19 @@ impl Render for TableView {
                     Some(structure) => d.child(structure),
                     None => d
                         .child(self.render_toolbar(cx))
+                        .when(self.confirm_save, |d| {
+                            d.child(ui::confirm_bar(
+                                "This connection asks before writes. Save these changes?",
+                                ui::primary_button("confirm-save", "Save")
+                                    .on_click(cx.listener(|this, _, _, cx| this.save_now(cx))),
+                                ui::ghost_button("cancel-save", "Cancel").on_click(cx.listener(
+                                    |this, _, _, cx| {
+                                        this.confirm_save = false;
+                                        cx.notify();
+                                    },
+                                )),
+                            ))
+                        })
                         .child(
                             div()
                                 .flex()

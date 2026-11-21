@@ -239,13 +239,12 @@ impl Workspace {
                 Ok(conn) => {
                     // The connections search had focus and is going away; keep ⌘K working.
                     window.focus(&this.focus, cx);
-                    let read_only = saved.safe_mode == SafeMode::ReadOnly;
                     let tag = saved.tag.unwrap_or(Tag::Green);
                     let session = cx.new(|cx| {
                         let mut s = Session::new(
                             saved.name.clone().into(),
                             tag,
-                            read_only,
+                            saved.safe_mode,
                             saved.id,
                             conn,
                             window,
@@ -349,7 +348,7 @@ impl Workspace {
                             .text_color(c(theme::FAINT))
                             .child(s.engine()),
                     )
-                    .when(s.read_only, |d| {
+                    .when(s.safe_mode == SafeMode::ReadOnly, |d| {
                         d.child(ui::badge(
                             "READ-ONLY",
                             theme::DELETED_TEXT,

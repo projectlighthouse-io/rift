@@ -20,7 +20,7 @@ use gpui_component::input::{
 use lsp_types::CompletionItemKind;
 use tokio_util::sync::CancellationToken;
 use traits::{Connection, StatementOutput};
-use types::{Column, ConnectionId, Error, HistoryEntry, ObjectKind, Row, Tag};
+use types::{Column, ConnectionId, Error, HistoryEntry, ObjectKind, Row, SafeMode, Tag};
 
 use crate::chart_panel::{ChartPanel, PinChart};
 use crate::grid::Grid;
@@ -97,6 +97,9 @@ pub(crate) struct SqlEditor {
     /// Index into `results`; `results.len()` means the Messages tab.
     active_tab: usize,
     running: Option<CancellationToken>,
+    safe_mode: SafeMode,
+    /// Statements waiting for the user to confirm, with the reason.
+    confirm: Option<(Vec<String>, String)>,
     summary: Option<Summary>,
     history: Option<Vec<HistoryEntry>>,
     copy_menu: bool,
@@ -154,6 +157,8 @@ impl SqlEditor {
             messages: Vec::new(),
             active_tab: 0,
             running: None,
+            safe_mode: SafeMode::Off,
+            confirm: None,
             summary: None,
             history: None,
             copy_menu: false,
@@ -311,7 +316,41 @@ impl SqlEditor {
         cx.notify();
     }
 
+    pub(crate) fn set_safe_mode(&mut self, mode: SafeMode) {
+        self.safe_mode = mode;
+    }
+
+    /// Why `statements` need confirming first, if they do.
+    fn confirm_reason(&self, statements: &[String]) -> Option<String> {
+        let dialect = dialect::Dialect::for_driver(self.conn.info().driver.as_str());
+        let checks: Vec<_> = statements
+            .iter()
+            .flat_map(|s| dialect::safety::analyze(dialect, s))
+            .collect();
+        if checks.iter().any(|c| c.unbounded) {
+            return Some("An UPDATE or DELETE has no WHERE and will change every row.".into());
+        }
+        let writes = checks.iter().filter(|c| c.writes).count();
+        (self.safe_mode == SafeMode::ConfirmWrites && writes > 0).then(|| {
+            format!(
+                "{} asks before writes: {writes} statement{} may change data.",
+                self.label,
+                if writes == 1 { "" } else { "s" }
+            )
+        })
+    }
+
     fn run(&mut self, statements: Vec<String>, cx: &mut Context<Self>) {
+        if let Some(reason) = self.confirm_reason(&statements) {
+            self.confirm = Some((statements, reason));
+            cx.notify();
+            return;
+        }
+        self.run_confirmed(statements, cx);
+    }
+
+    fn run_confirmed(&mut self, statements: Vec<String>, cx: &mut Context<Self>) {
+        self.confirm = None;
         let conn = self.conn.clone();
         let history = state::history(cx);
         let connection = self.connection_id;
@@ -1021,6 +1060,24 @@ impl Render for SqlEditor {
                     .line_height(px(21.))
                     .child(Editor::new(&self.editor).appearance(false).h_full()),
             )
+            .children(self.confirm.as_ref().map(|(_, reason)| {
+                ui::confirm_bar(
+                    reason.clone(),
+                    ui::primary_button("confirm-run", "Run anyway").on_click(cx.listener(
+                        |this, _, _, cx| {
+                            if let Some((statements, _)) = this.confirm.take() {
+                                this.run_confirmed(statements, cx);
+                            }
+                        },
+                    )),
+                    ui::ghost_button("cancel-run", "Cancel").on_click(cx.listener(
+                        |this, _, _, cx| {
+                            this.confirm = None;
+                            cx.notify();
+                        },
+                    )),
+                )
+            }))
             .child(self.render_results(cx))
             .child(self.render_status(cx))
     }

@@ -276,3 +276,27 @@ mod tests {
         assert_eq!(super::thousands(1_000_000), "1,000,000");
     }
 }
+
+/// A warning bar asking to confirm a write: message, then the confirm and cancel buttons.
+pub(crate) fn confirm_bar(
+    message: impl Into<SharedString>,
+    confirm: Stateful<Div>,
+    cancel: Stateful<Div>,
+) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(px(10.))
+        .px(px(12.))
+        .py(px(8.))
+        .bg(c(theme::EDITED_BG))
+        .border_b_1()
+        .border_color(c(theme::EDITED_RING))
+        .text_size(px(13.))
+        .text_color(c(theme::EDITED_TEXT))
+        .child(icon("info", 14., theme::EDITED_TEXT))
+        .child(div().flex_1().min_w_0().child(message.into()))
+        .child(confirm)
+        .child(cancel)
+}

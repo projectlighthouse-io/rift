@@ -9,7 +9,7 @@ use gpui::{
 use gpui_component::input::{InputEvent, InputState};
 use traits::Connection;
 use types::{
-    ConnectionId, Dashboard, DbObject, Error, Filter, KeyBytes, KeyDirectory, ObjectKind,
+    ConnectionId, Dashboard, DbObject, Error, Filter, KeyBytes, KeyDirectory, ObjectKind, SafeMode,
     SchemaName, TableRef, Tag,
 };
 
@@ -54,7 +54,7 @@ impl Doc {
 pub(crate) struct Session {
     pub(crate) name: SharedString,
     pub(crate) tag: Tag,
-    pub(crate) read_only: bool,
+    pub(crate) safe_mode: SafeMode,
     pub(crate) conn: Arc<dyn Connection>,
     id: ConnectionId,
     queries: usize,
@@ -80,7 +80,7 @@ impl Session {
     pub(crate) fn new(
         name: SharedString,
         tag: Tag,
-        read_only: bool,
+        safe_mode: SafeMode,
         id: ConnectionId,
         conn: Arc<dyn Connection>,
         window: &mut Window,
@@ -95,7 +95,7 @@ impl Session {
         let mut session = Self {
             name,
             tag,
-            read_only,
+            safe_mode,
             conn,
             id,
             queries: 0,
@@ -240,6 +240,8 @@ impl Session {
             None => {
                 let conn = self.conn.clone();
                 let view = cx.new(|cx| TableView::new(conn, table, filter, window, cx));
+                let mode = self.safe_mode;
+                view.update(cx, |v, _| v.set_safe_mode(mode));
                 self._subscriptions.push(cx.subscribe_in(
                     &view,
                     window,
@@ -352,6 +354,8 @@ impl Session {
         };
         let (conn, id, tag) = (self.conn.clone(), self.id, self.tag);
         let editor = cx.new(|cx| SqlEditor::new(conn, id, label, tag, title, sql, window, cx));
+        let mode = self.safe_mode;
+        editor.update(cx, |e, _| e.set_safe_mode(mode));
         self._subscriptions
             .push(cx.subscribe(&editor, |this, _, _: &Pinned, cx| {
                 this.reload_dashboards(cx)
@@ -515,9 +519,13 @@ impl Session {
                         .text_size(px(12.5))
                         .text_color(c(theme::EDITED_TEXT))
                         .child(ui::icon("info", 13., theme::EDITED_TEXT))
-                        .child(div().flex_1().min_w_0().child(SharedString::from(format!(
-                            "Read-mostly: cell edits are off for {engine}. Inserts still work."
-                        )))),
+                        .child(div().flex_1().min_w_0().child(SharedString::from(
+                            if self.safe_mode == SafeMode::ReadOnly {
+                                "Read-only: this connection cannot write by any path.".to_owned()
+                            } else {
+                                format!("Read-mostly: cell edits are off for {engine}. Inserts still work.")
+                            },
+                        ))),
                 )
             })
             .child(
