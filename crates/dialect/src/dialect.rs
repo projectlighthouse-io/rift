@@ -17,6 +17,18 @@ pub enum Dialect {
 }
 
 impl Dialect {
+    /// The dialect a driver speaks, by driver id; `None` for drivers without SQL.
+    #[must_use]
+    pub fn for_driver(id: &str) -> Option<Self> {
+        match id {
+            "postgres" => Some(Dialect::Postgres),
+            "mysql" => Some(Dialect::MySql),
+            "sqlite" => Some(Dialect::Sqlite),
+            "clickhouse" => Some(Dialect::ClickHouse),
+            _ => None,
+        }
+    }
+
     /// Quotes an identifier when needed: `"Name"` or `` `my col` `` for MySQL and ClickHouse.
     /// Lower-case names that are not keywords are left bare, so generated SQL reads naturally.
     #[must_use]

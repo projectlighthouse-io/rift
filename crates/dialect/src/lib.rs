@@ -6,6 +6,7 @@ pub mod ddl;
 mod dialect;
 pub mod edits;
 pub mod rows;
+pub mod safety;
 pub mod split;
 
 pub use dialect::Dialect;

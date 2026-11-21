@@ -11,6 +11,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+sqlparser = { workspace = true }
 types = { workspace = true }
 
 [dev-dependencies]

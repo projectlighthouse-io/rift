@@ -1056,9 +1056,11 @@ dependencies = [
 name = "conn"
 version = "0.1.0"
 dependencies = [
+ "dialect",
  "futures",
  "keyring",
  "testkit",
+ "tokio-util",
  "traits",
  "types",
 ]
@@ -1425,6 +1427,7 @@ name = "dialect"
 version = "0.1.0"
 dependencies = [
  "insta",
+ "sqlparser",
  "types",
 ]
 
@@ -6743,6 +6746,15 @@ dependencies = [
  "js-sys",
  "rsqlite-vfs",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "sqlparser"
+version = "0.64.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92e0d273b4f8ddd14a35ed36862acbc9cc96cec578e36ee1881a9d42e0e0f2c8"
+dependencies = [
+ "log",
 ]
 
 [[package]]
