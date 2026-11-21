@@ -276,17 +276,23 @@ impl Render for DirectoryTree {
                             .text_size(px(12.5))
                             .child(SharedString::from(label)),
                     )
-                    .children(self.counts.get(&path).map(|n| {
-                        div()
-                            .ml_auto()
-                            .text_size(px(11.5))
-                            .text_color(c(theme::FAINT))
-                            .child(SharedString::from(if *n >= COUNT_CAP {
-                                format!("{}+", ui::thousands(*n))
-                            } else {
-                                ui::thousands(*n)
-                            }))
-                    }))
+                    // Parents usually hold no keys of their own; a 0 there is noise.
+                    .children(
+                        self.counts
+                            .get(&path)
+                            .filter(|n| **n > 0 || !self.has_children(&path))
+                            .map(|n| {
+                                div()
+                                    .ml_auto()
+                                    .text_size(px(11.5))
+                                    .text_color(c(theme::FAINT))
+                                    .child(SharedString::from(if *n >= COUNT_CAP {
+                                        format!("{}+", ui::thousands(*n))
+                                    } else {
+                                        ui::thousands(*n)
+                                    }))
+                            }),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.selected = Some(open_dir.path.clone());
                         cx.emit(OpenDirectory(open_dir.clone()));
@@ -909,15 +915,19 @@ impl RangeView {
                         .child(match editing {
                             Some(editor) => {
                                 let key = key.clone();
+                                let original = text.clone();
                                 div()
                                     .flex()
                                     .gap(px(8.))
                                     .child(ui::primary_button("value-save", "Save").on_click(
                                         cx.listener(move |this, _, _, cx| {
-                                            let bytes =
-                                                editor.read(cx).value().to_string().into_bytes();
+                                            let edited = editor.read(cx).value().to_string();
                                             this.panel = Panel::Value;
-                                            this.write(key.clone(), Some(bytes), cx);
+                                            if let Some(bytes) = saved_bytes(&original, &edited) {
+                                                this.write(key.clone(), Some(bytes), cx);
+                                            } else {
+                                                cx.notify();
+                                            }
                                         }),
                                     ))
                                     .child(ui::ghost_button("value-cancel", "Cancel").on_click(
@@ -1063,6 +1073,20 @@ impl RangeView {
     }
 }
 
+/// Bytes to write for an edited value, or `None` when nothing changed. The editor shows
+/// JSON pretty-printed; compact JSON stays compact when saved.
+fn saved_bytes(original: &str, edited: &str) -> Option<Vec<u8>> {
+    if edited == pretty(original) || edited == original {
+        return None;
+    }
+    let compact =
+        !original.contains('\n') && serde_json::from_str::<serde_json::Value>(original).is_ok();
+    match serde_json::from_str::<serde_json::Value>(edited) {
+        Ok(v) if compact => serde_json::to_string(&v).ok().map(String::into_bytes),
+        _ => Some(edited.as_bytes().to_vec()),
+    }
+}
+
 /// Pretty-prints JSON; other text is returned as is.
 fn pretty(text: &str) -> String {
     serde_json::from_str::<serde_json::Value>(text)
@@ -1162,5 +1186,14 @@ mod tests {
             bytes
         );
         assert_eq!(super::strinc(b"\x15\x02"), b"\x15\x03");
+        let original = r#"{"name":"chloe","plan":"free"}"#;
+        assert_eq!(super::saved_bytes(original, &super::pretty(original)), None);
+        assert_eq!(
+            super::saved_bytes(
+                original,
+                "{\n  \"name\": \"chloe\",\n  \"plan\": \"pro\"\n}"
+            ),
+            Some(br#"{"name":"chloe","plan":"pro"}"#.to_vec())
+        );
     }
 }
