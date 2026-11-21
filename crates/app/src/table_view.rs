@@ -22,6 +22,7 @@ use crate::column_stats::{ColumnStatsView, StatsAction};
 use crate::dropdown::Dropdown;
 use crate::grid::{Grid, GridEvent, GridRow, RowMark};
 use crate::structure_view::{StructureEvent, StructureView};
+use crate::table_io::{self, Format, ImportDone, ImportPanel};
 use crate::theme::{self, c};
 use crate::{runtime, ui};
 
@@ -111,6 +112,11 @@ pub(crate) struct TableView {
     stats: Option<Entity<ColumnStatsView>>,
     safe_mode: SafeMode,
     confirm_save: bool,
+    export_menu: bool,
+    import: Option<(Entity<ImportPanel>, Subscription)>,
+    /// Outcome of the last export or import, shown in the status bar.
+    note: Option<(String, bool)>,
+    _io: Option<Task<()>>,
     _tasks: Vec<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -166,6 +172,10 @@ impl TableView {
             stats: None,
             safe_mode: SafeMode::Off,
             confirm_save: false,
+            export_menu: false,
+            import: None,
+            note: None,
+            _io: None,
             _tasks: Vec::new(),
             _subscriptions: vec![subscription],
         };
@@ -478,6 +488,142 @@ impl TableView {
         edits
     }
 
+    fn render_export_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        deferred(
+            anchored().snap_to_window().child(
+                div()
+                    .id("export-menu")
+                    .occlude()
+                    .mt(px(30.))
+                    .w(px(170.))
+                    .p(px(4.))
+                    .rounded(px(6.))
+                    .bg(c(theme::BG))
+                    .border_1()
+                    .border_color(c(theme::LINE))
+                    .shadow_md()
+                    .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                        this.export_menu = false;
+                        cx.notify();
+                    }))
+                    .children(Format::ALL.iter().map(|(format, label)| {
+                        let format = *format;
+                        div()
+                            .id(SharedString::from(format!("export-{label}")))
+                            .h(px(28.))
+                            .px(px(8.))
+                            .flex()
+                            .items_center()
+                            .rounded(px(4.))
+                            .text_size(px(13.))
+                            .cursor_pointer()
+                            .hover(|d| d.bg(c(theme::SELECTION)))
+                            .child(SharedString::from(format!("Export table as {label}")))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.export(format, window, cx)
+                            }))
+                    })),
+            ),
+        )
+        .with_priority(1)
+    }
+
+    /// Asks where to save, then writes every row matching the applied filters.
+    fn export(&mut self, format: Format, window: &mut Window, cx: &mut Context<Self>) {
+        self.export_menu = false;
+        let file = format!("{}.{}", self.table.name, format.extension());
+        let dir = dirs::download_dir().unwrap_or_else(std::env::temp_dir);
+        let path = cx.prompt_for_new_path(&dir, Some(&file));
+        let (conn, table, filters) = (self.conn.clone(), self.table.clone(), self.applied.clone());
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(path))) = path.await else {
+                return;
+            };
+            let _ = this.update(cx, |this, cx| {
+                this.note = Some((format!("Exporting to {}…", path.display()), false));
+                let shown = path.display().to_string();
+                this._io = Some(runtime::spawn_db(
+                    cx,
+                    table_io::export_table(conn, table, filters, format, path),
+                    move |this: &mut Self, result, cx| {
+                        this.note = Some(match result {
+                            Ok(n) => (
+                                format!("Exported {} rows to {shown}", ui::thousands(n)),
+                                false,
+                            ),
+                            Err(e) => (format!("Export failed: {e}"), true),
+                        });
+                        cx.notify();
+                    },
+                ));
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Asks for a CSV file and opens the import panel for it.
+    fn start_import(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let paths = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Import".into()),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = paths.await else {
+                return;
+            };
+            let Some(path) = paths.into_iter().next() else {
+                return;
+            };
+            let parsed = std::fs::read_to_string(&path)
+                .map_err(|e| e.to_string())
+                .and_then(|text| table_io::parse_csv(&text));
+            let file = path
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let _ = this.update_in(cx, |this, window, cx| match parsed {
+                Ok((headers, rows)) => {
+                    let (conn, table, columns) =
+                        (this.conn.clone(), this.table.clone(), this.columns.clone());
+                    let panel = cx.new(|cx| {
+                        ImportPanel::new(
+                            conn,
+                            table,
+                            columns,
+                            table_io::CsvFile {
+                                name: file,
+                                headers,
+                                rows,
+                            },
+                            window,
+                            cx,
+                        )
+                    });
+                    let sub = cx.subscribe(&panel, |this, _, done: &ImportDone, cx| {
+                        this.import = None;
+                        if let Some(n) = done.0 {
+                            this.note =
+                                Some((format!("Imported {} rows", ui::thousands(n)), false));
+                            this.reload(cx);
+                        }
+                        cx.notify();
+                    });
+                    this.import = Some((panel, sub));
+                    cx.notify();
+                }
+                Err(e) => {
+                    this.note = Some((format!("Could not read {file}: {e}"), true));
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
     pub(crate) fn set_safe_mode(&mut self, mode: SafeMode) {
         self.safe_mode = mode;
     }
@@ -726,7 +872,25 @@ impl TableView {
                 ui::icon_button("reload", "refresh", 28., 15.)
                     .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
             )
-            .child(ui::icon_button("export", "download", 28., 15.))
+            .when(self.conn.edit_rows().is_some(), |d| {
+                d.child(
+                    ui::icon_button("import", "upload", 28., 15.)
+                        .on_click(cx.listener(|this, _, window, cx| this.start_import(window, cx))),
+                )
+            })
+            .child(
+                div()
+                    .relative()
+                    .child(
+                        ui::icon_button("export", "download", 28., 15.).on_click(cx.listener(
+                            |this, _, _, cx| {
+                                this.export_menu = !this.export_menu;
+                                cx.notify();
+                            },
+                        )),
+                    )
+                    .children(self.export_menu.then(|| self.render_export_menu(cx))),
+            )
             .child(
                 div()
                     .relative()
@@ -1091,7 +1255,18 @@ impl TableView {
             .bg(c(theme::PANEL))
             .text_size(px(12.))
             .text_color(c(theme::MUTED))
-            .child(left)
+            .child(left.children(self.note.clone().map(|(text, is_error)| {
+                div()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
+                    .text_color(c(if is_error {
+                        theme::DELETED_TEXT
+                    } else {
+                        theme::MUTED
+                    }))
+                    .child(SharedString::from(text))
+            })))
             .children(right)
     }
 }
@@ -1155,6 +1330,7 @@ impl Render for TableView {
                     _ => this.save(cx),
                 }
             }))
+            .relative()
             .flex()
             .flex_col()
             .size_full()
@@ -1187,6 +1363,21 @@ impl Render for TableView {
                         .child(self.render_status(cx)),
                 },
             )
+            .children(self.import.as_ref().map(|(panel, _)| {
+                let mut veil = theme::hsla(theme::BG);
+                veil.a = 0.85;
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full()
+                    .bg(veil)
+                    .flex()
+                    .justify_center()
+                    .items_start()
+                    .pt(px(40.))
+                    .child(panel.clone())
+            }))
     }
 }
 

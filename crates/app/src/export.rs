@@ -30,7 +30,7 @@ pub(crate) fn csv<'a>(columns: &[Column], rows: impl Iterator<Item = &'a [Value]
     out
 }
 
-fn json_value(value: &Value) -> serde_json::Value {
+pub(crate) fn json_value(value: &Value) -> serde_json::Value {
     match value {
         Value::Null => serde_json::Value::Null,
         Value::Bool(b) => (*b).into(),
@@ -61,12 +61,13 @@ pub(crate) fn json<'a>(columns: &[Column], rows: impl Iterator<Item = &'a [Value
 }
 
 /// One `INSERT` per row into `table`, using standard SQL quoting.
+/// `INSERT` statements into `target` (already quoted for `dialect`).
 pub(crate) fn inserts<'a>(
-    table: &str,
+    dialect: Dialect,
+    target: &str,
     columns: &[Column],
     rows: impl Iterator<Item = &'a [Value]>,
 ) -> String {
-    let dialect = Dialect::Postgres;
     let cols = columns
         .iter()
         .map(|c| dialect.ident(c.name.as_str()))
@@ -78,16 +79,14 @@ pub(crate) fn inserts<'a>(
             .map(|v| dialect.literal(v))
             .collect::<Vec<_>>()
             .join(", ");
-        format!(
-            "INSERT INTO {} ({cols}) VALUES ({values});\n",
-            dialect.ident(table)
-        )
+        format!("INSERT INTO {target} ({cols}) VALUES ({values});\n")
     })
     .collect()
 }
 
 #[cfg(test)]
 mod tests {
+    use dialect::Dialect;
     use types::{Column, Value};
 
     fn data() -> (Vec<Column>, Vec<Vec<Value>>) {
@@ -123,7 +122,12 @@ mod tests {
     fn insert_statements() {
         let (cols, rows) = data();
         assert_eq!(
-            super::inserts("result", &cols, rows.iter().map(Vec::as_slice)),
+            super::inserts(
+                Dialect::Postgres,
+                "result",
+                &cols,
+                rows.iter().map(Vec::as_slice)
+            ),
             "INSERT INTO result (id, note) VALUES (1, 'a, \"b\"');\nINSERT INTO result (id, note) VALUES (2, NULL);\n"
         );
     }

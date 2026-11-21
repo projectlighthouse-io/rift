@@ -20,6 +20,7 @@ mod sql_editor;
 mod sql_syntax;
 mod state;
 mod structure_view;
+mod table_io;
 mod table_view;
 mod theme;
 mod ui;

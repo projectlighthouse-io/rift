@@ -54,6 +54,7 @@ icons!(
     "table",
     "terminal",
     "trash",
+    "upload",
 );
 
 /// Rift icons under `rift/`, falling back to gpui-component's bundled icons.

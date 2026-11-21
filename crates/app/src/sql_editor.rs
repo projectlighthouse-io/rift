@@ -582,7 +582,11 @@ impl SqlEditor {
             let text = match format {
                 "CSV" => export::csv(&columns, rows),
                 "JSON" => export::json(&columns, rows),
-                _ => export::inserts("result", &columns, rows),
+                _ => {
+                    let d = dialect::Dialect::for_driver(self.conn.info().driver.as_str())
+                        .unwrap_or(dialect::Dialect::Postgres);
+                    export::inserts(d, &d.ident("result"), &columns, rows)
+                }
             };
             cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
