@@ -79,6 +79,8 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: "0"
       RIFT_FDB_CLUSTER: docker:docker@127.0.0.1:4500
       RIFT_REQUIRE_TOOLS: "1"
+      RIFT_SSH_PORT: "2222"
+      RIFT_SSH_TARGET: 127.0.0.1:5432
     steps:
       - name: Free disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
@@ -89,6 +91,11 @@ jobs:
           sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
             libx11-xcb-dev libxcb1-dev libvulkan-dev libfontconfig-dev libfreetype-dev \
             libasound2-dev libssl-dev pkg-config
+      - name: Start an SSH bastion for the tunnel test
+        run: |
+          mkdir -p dev/ssh/keys && ssh-keygen -q -t ed25519 -N '' -f dev/ssh/keys/id_ed25519
+          docker build -q -t rift-ssh dev/ssh
+          docker run -d --network host -v "$PWD/dev/ssh/keys/id_ed25519.pub:/keys/authorized_keys:ro" rift-ssh
       - name: Install pg_dump and mysqldump for the backup suites
         run: sudo apt-get install -y postgresql-client mysql-client
       - name: Install the FoundationDB client and create the database
