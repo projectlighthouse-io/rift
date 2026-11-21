@@ -1,0 +1,38 @@
+[workspace]
+members = ["cargo:."]
+
+# Release builds: `dist plan` previews them; pushing a `v*` tag runs .github/workflows/release.yml.
+[dist]
+cargo-dist-version = "0.34.0"
+ci = "github"
+installers = ["shell", "powershell", "homebrew"]
+# The tap repository must exist and HOMEBREW_TAP_TOKEN must be a repo secret.
+tap = "projectlighthouse-io/homebrew-tap"
+publish-jobs = ["homebrew"]
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+]
+install-path = "CARGO_HOME"
+install-updater = false
+
+[dist.github-custom-runners]
+aarch64-unknown-linux-gnu = "ubuntu-24.04-arm"
+x86_64-unknown-linux-gnu = "ubuntu-24.04"
+
+# GPUI needs these headers to build on Linux.
+[dist.dependencies.apt]
+libxkbcommon-dev = "*"
+libxkbcommon-x11-dev = "*"
+libwayland-dev = "*"
+libx11-xcb-dev = "*"
+libxcb1-dev = "*"
+libvulkan-dev = "*"
+libfontconfig-dev = "*"
+libfreetype-dev = "*"
+libasound2-dev = "*"
+libssl-dev = "*"
+pkg-config = "*"
