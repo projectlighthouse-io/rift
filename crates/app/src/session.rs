@@ -161,14 +161,8 @@ impl Session {
 
     /// The engine label shown on the connection tab, e.g. `PostgreSQL 16`.
     pub(crate) fn engine(&self) -> SharedString {
-        // `PostgreSQL 16.4` → `PostgreSQL 16`.
-        let version = &self.conn.info().server_version;
-        match version.rsplit_once(' ') {
-            Some((name, number)) => {
-                format!("{name} {}", number.split('.').next().unwrap_or(number)).into()
-            }
-            None => version.clone().into(),
-        }
+        // Drivers report the version as it should be shown (`PostgreSQL 16`, `MySQL 8.0`).
+        self.conn.info().server_version.clone().into()
     }
 
     /// Reloads schemas and objects.
