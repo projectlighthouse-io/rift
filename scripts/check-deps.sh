@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Fails if any *-driver package is reachable from `app` other than through `registry`,
+# Fails if any *-driver package is reachable from `rift` (the app) other than through `registry`,
 # or if a library crate breaks the layering rules in docs/STYLE.md.
 set -euo pipefail
 
 fail=0
 
 # app -> driver edges are only allowed below registry. --prune registry hides that subtree.
-direct=$(cargo tree -p app -e normal --prefix none --prune registry | grep -E '^[a-z]+-driver ' || true)
+direct=$(cargo tree -p rift -e normal --prefix none --prune registry | grep -E '^[a-z]+-driver ' || true)
 if [[ -n "$direct" ]]; then
   echo "error: app reaches driver crates outside registry:" >&2
   echo "$direct" >&2

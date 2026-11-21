@@ -1,11 +1,13 @@
 [package]
-name = "app"
+name = "rift"
 description = "Rift: a fast, native database client."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lints]
 workspace = true
@@ -41,3 +43,7 @@ path = "src/main.rs"
 
 [dev-dependencies]
 testkit = { workspace = true }
+
+# `cargo dist` ships the app even though crates are not published to crates.io.
+[package.metadata.dist]
+dist = true

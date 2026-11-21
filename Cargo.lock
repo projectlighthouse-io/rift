@@ -225,36 +225,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
-name = "app"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "conn",
- "csv",
- "dialect",
- "dirs 7.0.0",
- "futures",
- "gpui-component",
- "gpui-kit-assets",
- "gpui-pre",
- "gpui-pre-platform",
- "lsp-types",
- "registry",
- "resvg 0.50.0",
- "serde_json",
- "sqlformat",
- "store",
- "testkit",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "traits",
- "types",
-]
-
-[[package]]
 name = "apple-native-keyring-store"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6572,6 +6542,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
 dependencies = [
  "bytemuck",
+]
+
+[[package]]
+name = "rift"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "conn",
+ "csv",
+ "dialect",
+ "dirs 7.0.0",
+ "futures",
+ "gpui-component",
+ "gpui-kit-assets",
+ "gpui-pre",
+ "gpui-pre-platform",
+ "lsp-types",
+ "registry",
+ "resvg 0.50.0",
+ "serde_json",
+ "sqlformat",
+ "store",
+ "testkit",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "traits",
+ "types",
 ]
 
 [[package]]
