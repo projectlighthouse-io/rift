@@ -4,6 +4,7 @@
 //! the UI needs. Queries are cancelled with `sqlite3_interrupt`.
 
 mod analysis;
+mod backup;
 mod catalog;
 mod connection;
 mod edit;

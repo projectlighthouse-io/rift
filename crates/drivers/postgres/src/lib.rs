@@ -5,6 +5,7 @@
 //! connection.
 
 mod analysis;
+mod backup;
 mod catalog;
 mod connection;
 mod edit;

@@ -8,8 +8,8 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use rusqlite::OpenFlags;
 use traits::{
-    Aggregate, Browse, ColumnStats, Connection, Describe, EditRows, EditSchema, Explain, Query,
-    Spawner, Transactions,
+    Aggregate, Backup, Browse, ColumnStats, Connection, Describe, EditRows, EditSchema, Explain,
+    Query, Spawner, Transactions,
 };
 use types::{ConnectionInfo, Error};
 
@@ -88,6 +88,10 @@ impl Connection for SqliteConnection {
     }
 
     fn explain(&self) -> Option<&dyn Explain> {
+        Some(self)
+    }
+
+    fn backup(&self) -> Option<&dyn Backup> {
         Some(self)
     }
 

@@ -8,8 +8,8 @@ use futures::future::BoxFuture;
 use sqlx::PgPool;
 use sqlx::postgres::PgConnectOptions;
 use traits::{
-    Aggregate, Browse, ColumnStats, Connection, Describe, EditRows, EditSchema, Explain, Query,
-    Spawner, Transactions,
+    Aggregate, Backup, Browse, ColumnStats, Connection, Describe, EditRows, EditSchema, Explain,
+    Query, Spawner, Transactions,
 };
 use types::{ConnectionInfo, Error};
 
@@ -22,6 +22,8 @@ pub(crate) struct PgConnection {
     pub(crate) options: PgConnectOptions,
     pub(crate) spawner: Arc<dyn Spawner>,
     pub(crate) info: ConnectionInfo,
+    /// For `pg_dump` and `psql`.
+    pub(crate) password: Option<String>,
 }
 
 impl Connection for PgConnection {
@@ -62,6 +64,10 @@ impl Connection for PgConnection {
     }
 
     fn explain(&self) -> Option<&dyn Explain> {
+        Some(self)
+    }
+
+    fn backup(&self) -> Option<&dyn Backup> {
         Some(self)
     }
 

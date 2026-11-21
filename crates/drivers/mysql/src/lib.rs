@@ -5,6 +5,7 @@
 //! through `EditSchema::transactional_ddl`.
 
 mod analysis;
+mod backup;
 mod catalog;
 mod connection;
 mod edit;

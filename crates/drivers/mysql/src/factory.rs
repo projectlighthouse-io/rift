@@ -121,6 +121,7 @@ impl DriverFactory for MySqlFactory {
                 options,
                 spawner: deps.spawner.clone(),
                 info,
+                password: config.password.as_ref().map(|p| p.expose().to_owned()),
             }) as Arc<dyn Connection>)
         }
         .boxed()

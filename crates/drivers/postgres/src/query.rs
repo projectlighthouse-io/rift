@@ -77,6 +77,7 @@ impl Query for PgConnection {
                 options: self.options.clone(),
                 spawner: self.spawner.clone(),
                 info: self.info.clone(),
+                password: self.password.clone(),
             };
             self.spawner.spawn(
                 async move {

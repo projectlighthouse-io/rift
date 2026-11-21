@@ -8,8 +8,8 @@ use futures::future::BoxFuture;
 use sqlx::MySqlPool;
 use sqlx::mysql::MySqlConnectOptions;
 use traits::{
-    Aggregate, Browse, ColumnStats, Connection, Describe, EditRows, EditSchema, Explain, Query,
-    Spawner, Transactions,
+    Aggregate, Backup, Browse, ColumnStats, Connection, Describe, EditRows, EditSchema, Explain,
+    Query, Spawner, Transactions,
 };
 use types::{ConnectionInfo, Error};
 
@@ -22,6 +22,8 @@ pub(crate) struct MySqlConnection {
     pub(crate) options: MySqlConnectOptions,
     pub(crate) spawner: Arc<dyn Spawner>,
     pub(crate) info: ConnectionInfo,
+    /// For `mysqldump` and `mysql`.
+    pub(crate) password: Option<String>,
 }
 
 impl Connection for MySqlConnection {
@@ -62,6 +64,10 @@ impl Connection for MySqlConnection {
     }
 
     fn explain(&self) -> Option<&dyn Explain> {
+        Some(self)
+    }
+
+    fn backup(&self) -> Option<&dyn Backup> {
         Some(self)
     }
 
