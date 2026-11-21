@@ -280,3 +280,20 @@ Format: date, decision, reason.
   authentication only (configured key, else `~/.ssh/id_ed25519`/`id_rsa`). Host keys are
   trusted on first use and recorded in `~/.ssh/known_hosts`; a changed key is refused.
 - **TLS** was already per driver (Disable / Prefer / Require).
+
+## 2026-11-22 — M14
+
+- **The app package is named `rift`** (it was `app`), so release artifacts, installers and the
+  Homebrew formula carry the product name. The crate folder stays `crates/app`.
+- **Releases come from `dist` (cargo-dist 0.34)**, configured in `dist-workspace.toml`:
+  macOS arm64 and x86_64, Linux x86_64 and aarch64 (native ARM runner), Windows x64; shell,
+  PowerShell and Homebrew installers. Pushing a `v*` tag runs `.github/workflows/release.yml`.
+  The Homebrew job needs the `projectlighthouse-io/homebrew-tap` repository and a
+  `HOMEBREW_TAP_TOKEN` secret. macOS ships two per-architecture archives rather than one
+  universal binary; Homebrew and the installer pick the right one.
+- **Release builds use the `dist` profile** (release + thin LTO).
+- **The icon is an SVG** (`crates/app/assets/icon/rift.svg`): the coral database with a
+  rift through it. `scripts/make-icon.sh` renders the PNGs (resvg, in an ignored test) and
+  the `.icns` (iconutil).
+- **About window** from the Rift menu: icon, version, "Rift — a Project Lighthouse project".
+  ⌘Q quits.
