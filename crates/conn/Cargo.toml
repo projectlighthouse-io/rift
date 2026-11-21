@@ -17,8 +17,12 @@ dialect = { workspace = true }
 tokio-util = { workspace = true }
 futures = { workspace = true }
 keyring = { workspace = true }
+russh = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true }
 tokio-util = { workspace = true }
 testkit = { workspace = true }
 futures = { workspace = true }

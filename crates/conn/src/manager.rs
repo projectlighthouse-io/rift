@@ -1,12 +1,18 @@
 //! Builds configs from saved connections and opens them.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
-use traits::{ConnectDeps, Connection, ConnectionStore, DriverFactory, SecretStore};
+use traits::{
+    ConnectDeps, Connection, ConnectionStore, DriverFactory, SecretStore, Tunnel, TunnelHandle,
+};
 use types::{ConnConfig, ConnectionId, DriverInfo, Error, SafeMode, SavedConnection, Secret};
 
 use crate::guard::ReadOnlyConnection;
+use crate::ssh::RusshTunnel;
+
+/// A tunnel kept open while its connection lives.
+type OpenTunnel = (Weak<dyn Connection>, Box<dyn TunnelHandle>);
 
 /// Owns the driver list, saved connections and secrets.
 pub struct ConnectionManager {
@@ -14,6 +20,10 @@ pub struct ConnectionManager {
     store: Arc<dyn ConnectionStore>,
     secrets: Arc<dyn SecretStore>,
     deps: ConnectDeps,
+    tunnel: Box<dyn Tunnel>,
+    /// Open tunnels, kept while their connection lives.
+    // ponytail: closed connections' tunnels are dropped on the next connect, not instantly.
+    tunnels: Mutex<Vec<OpenTunnel>>,
 }
 
 impl ConnectionManager {
@@ -30,6 +40,8 @@ impl ConnectionManager {
             store,
             secrets,
             deps,
+            tunnel: Box::new(RusshTunnel::default()),
+            tunnels: Mutex::new(Vec::new()),
         }
     }
 
@@ -95,6 +107,7 @@ impl ConnectionManager {
             password,
             tls: connection.tls,
             safe_mode: connection.safe_mode,
+            ssh: connection.ssh.clone(),
         }
     }
 
@@ -108,7 +121,37 @@ impl ConnectionManager {
             .iter()
             .find(|d| d.info().id == config.driver)
             .ok_or_else(|| Error::invalid(format!("unknown driver {}", config.driver)))?;
+        let mut config = config.clone();
+        let tunnel = match config.ssh.clone() {
+            Some(ssh) => {
+                let host = config.get("host").unwrap_or("127.0.0.1").to_owned();
+                let port = match config.get("port") {
+                    Some(p) => p
+                        .parse()
+                        .map_err(|_| Error::invalid(format!("bad port: {p}")))?,
+                    None => driver
+                        .info()
+                        .default_port
+                        .ok_or_else(|| Error::invalid("SSH needs a host and port"))?,
+                };
+                let handle = self.tunnel.open(&ssh, None, &host, port).await?;
+                config = config
+                    .with("host", "127.0.0.1")
+                    .with("port", handle.local_port().to_string());
+                Some(handle)
+            }
+            None => None,
+        };
+        let config = &config;
         let conn = driver.connect(config, &self.deps).await?;
+        if let Some(handle) = tunnel {
+            let mut tunnels = self
+                .tunnels
+                .lock()
+                .map_err(|_| Error::invalid("tunnel list poisoned"))?;
+            tunnels.retain(|(conn, _)| conn.strong_count() > 0);
+            tunnels.push((Arc::downgrade(&conn), handle));
+        }
         Ok(if config.safe_mode == SafeMode::ReadOnly {
             Arc::new(ReadOnlyConnection::new(conn, config.driver.as_str()))
         } else {

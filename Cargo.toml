@@ -49,6 +49,7 @@ insta = "1.49.0"
 keyring = "4.2.0"
 redis = { version = "1.8.2", default-features = false, features = ["tokio-comp", "connection-manager", "streams"] }
 refinery = { version = "0.10.0", features = ["rusqlite"] }
+russh = "0.65.2"
 rusqlite = { version = "0.40.2", features = ["bundled", "backup"] }
 libloading = "0.9.1"
 reqwest = { version = "0.13.5", default-features = false, features = ["stream", "query"] }

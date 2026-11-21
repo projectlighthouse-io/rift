@@ -84,6 +84,9 @@ pub struct ConnConfig {
     pub tls: TlsMode,
     /// Safe mode; drivers enforce `ReadOnly` in the session when they can.
     pub safe_mode: SafeMode,
+    /// Reach the server through this SSH host. Drivers never see it: `conn` opens the tunnel
+    /// and points `host`/`port` at it.
+    pub ssh: Option<SshConfig>,
 }
 
 impl ConnConfig {
@@ -96,6 +99,7 @@ impl ConnConfig {
             password: None,
             tls: TlsMode::Disable,
             safe_mode: SafeMode::Off,
+            ssh: None,
         }
     }
 
