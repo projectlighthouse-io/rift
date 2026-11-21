@@ -21,13 +21,13 @@ impl Spawner for TokioSpawner {
     }
 }
 
-async fn connect() -> Option<Arc<dyn Connection>> {
+async fn connect(database: &str) -> Option<Arc<dyn Connection>> {
     let port = std::env::var("RIFT_MYSQL_PORT").unwrap_or_else(|_| "3306".into());
     let mut config = ConnConfig::new("mysql")
         .with("host", "127.0.0.1")
         .with("port", port)
         .with("user", "root")
-        .with("database", "mysql");
+        .with("database", database);
     config.password = Some(Secret::new("mysql"));
     let deps = ConnectDeps {
         spawner: Arc::new(TokioSpawner),
@@ -57,9 +57,13 @@ async fn run(conn: &dyn Connection, sql: &str) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mysql_passes_sql_suites() {
-    let Some(conn) = connect().await else { return };
-    run(&*conn, "DROP DATABASE IF EXISTS rift_test").await;
-    run(&*conn, "CREATE DATABASE rift_test").await;
+    let Some(admin) = connect("mysql").await else {
+        return;
+    };
+    run(&*admin, "DROP DATABASE IF EXISTS rift_test").await;
+    run(&*admin, "CREATE DATABASE rift_test").await;
+    // Work inside rift_test so the backup suite dumps only the test database.
+    let conn = connect("rift_test").await.expect("rift_test reachable");
     run(
         &*conn,
         "CREATE TABLE rift_test.rift_conformance \
@@ -79,5 +83,5 @@ async fn mysql_passes_sql_suites() {
         slow_sql: "SELECT SLEEP(10)".into(),
     };
     suites::run_sql_suites(&*conn, &fixture).await;
-    run(&*conn, "DROP DATABASE rift_test").await;
+    run(&*admin, "DROP DATABASE rift_test").await;
 }
