@@ -35,6 +35,14 @@ pub(crate) enum Target {
         session: usize,
         sql: String,
     },
+    /// Back up the session at this index to a file.
+    Backup {
+        session: usize,
+    },
+    /// Restore a backup file into the session at this index.
+    Restore {
+        session: usize,
+    },
     Connect(SavedConnection),
 }
 

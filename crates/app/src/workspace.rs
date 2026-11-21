@@ -4,7 +4,9 @@
 use std::time::Instant;
 
 use gpui::prelude::*;
-use gpui::{AnyElement, Context, Entity, FontWeight, Subscription, Window, canvas, div, px};
+use gpui::{
+    AnyElement, Context, Entity, FontWeight, SharedString, Subscription, Window, canvas, div, px,
+};
 use types::{ObjectKind, SafeMode, SavedConnection, Tag};
 
 use crate::actions::OpenPalette;
@@ -35,6 +37,9 @@ pub(crate) struct Workspace {
     start: Option<Start>,
     _start_subscription: Option<Subscription>,
     palette: Option<(Entity<Palette>, Subscription)>,
+    /// Status of a backup or restore, shown as a toast: text and whether it is an error.
+    notice: Option<(String, bool)>,
+    _job: Option<gpui::Task<()>>,
     /// Root focus, so ⌘K works before anything else has focus.
     focus: gpui::FocusHandle,
 }
@@ -47,6 +52,8 @@ impl Workspace {
             start: None,
             _start_subscription: None,
             palette: None,
+            notice: None,
+            _job: None,
             focus: cx.focus_handle(),
         };
         window.focus(&workspace.focus, cx);
@@ -69,6 +76,24 @@ impl Workspace {
             };
             for o in s.objects().iter().filter(|o| openable(o.kind)) {
                 items.push(palette::object_item(i, &s.name, o.kind, o.table.clone()));
+            }
+            if s.conn.backup().is_some() {
+                items.push(Item::new(
+                    "download",
+                    format!("Back up {}…", s.name),
+                    "backup".into(),
+                    false,
+                    Target::Backup { session: i },
+                ));
+                if s.safe_mode != SafeMode::ReadOnly {
+                    items.push(Item::new(
+                        "refresh",
+                        format!("Restore {} from backup…", s.name),
+                        "backup".into(),
+                        false,
+                        Target::Restore { session: i },
+                    ));
+                }
             }
             for d in s.dashboards() {
                 items.push(Item::new(
@@ -145,6 +170,14 @@ impl Workspace {
                 self.connect(saved.clone(), window, cx);
                 return;
             }
+            Target::Backup { session } => {
+                self.backup(*session, window, cx);
+                return;
+            }
+            Target::Restore { session } => {
+                self.restore(*session, window, cx);
+                return;
+            }
         };
         let Some(session) = self.sessions.get(session_ix).cloned() else {
             return;
@@ -157,8 +190,178 @@ impl Workspace {
             Target::Table { table, .. } => s.open_table(table, None, window, cx),
             Target::Dashboard { dashboard, .. } => s.open_dashboard(dashboard, window, cx),
             Target::Query { sql, .. } => s.open_query(sql, window, cx),
-            Target::Connect(_) => {}
+            Target::Connect(_) | Target::Backup { .. } | Target::Restore { .. } => {}
         });
+    }
+
+    fn notify_user(&mut self, text: String, is_error: bool, cx: &mut Context<Self>) {
+        self.notice = Some((text, is_error));
+        cx.notify();
+    }
+
+    /// Asks where to save, then backs up the session's database there.
+    fn backup(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(session) = self.sessions.get(ix) else {
+            return;
+        };
+        let (conn, name) = {
+            let s = session.read(cx);
+            (s.conn.clone(), s.name.to_string())
+        };
+        let ext = if conn.info().driver.as_str() == "sqlite" {
+            "sqlite"
+        } else {
+            "sql"
+        };
+        let file = format!(
+            "{name}-{}.{ext}",
+            chrono::Local::now().format("%Y%m%d-%H%M")
+        );
+        let dir = dirs::document_dir().unwrap_or_else(std::env::temp_dir);
+        let path = cx.prompt_for_new_path(&dir, Some(&file));
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(path))) = path.await else {
+                return;
+            };
+            let _ = this.update(cx, |w, cx| {
+                w.notify_user(format!("Backing up {name}…"), false, cx);
+                let started = std::time::Instant::now();
+                w._job = Some(crate::runtime::spawn_db(
+                    cx,
+                    async move {
+                        match conn.backup() {
+                            Some(b) => {
+                                b.backup(&path, tokio_util::sync::CancellationToken::new())
+                                    .await
+                            }
+                            None => Err(types::Error::unsupported("backup")),
+                        }
+                    },
+                    move |w: &mut Self, result, cx| match result {
+                        Ok(report) => w.notify_user(
+                            format!(
+                                "Backed up {name} to {} ({}, {:.1} s)",
+                                report.path.display(),
+                                ui::bytes(report.bytes),
+                                started.elapsed().as_secs_f32()
+                            ),
+                            false,
+                            cx,
+                        ),
+                        Err(e) => w.notify_user(format!("Backup of {name} failed: {e}"), true, cx),
+                    },
+                ));
+            });
+        })
+        .detach();
+    }
+
+    /// Asks for a backup file, confirms, then restores it into the session's database.
+    fn restore(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(session) = self.sessions.get(ix).cloned() else {
+            return;
+        };
+        let (conn, name) = {
+            let s = session.read(cx);
+            (s.conn.clone(), s.name.to_string())
+        };
+        let paths = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Restore".into()),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = paths.await else {
+                return;
+            };
+            let Some(path) = paths.into_iter().next() else {
+                return;
+            };
+            let file = path
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let Ok(answer) = this.update_in(cx, |_, window, cx| {
+                window.prompt(
+                    gpui::PromptLevel::Critical,
+                    &format!("Restore {file} into {name}?"),
+                    Some("Objects in the backup are dropped and recreated. This cannot be undone."),
+                    &["Restore", "Cancel"],
+                    cx,
+                )
+            }) else {
+                return;
+            };
+            if answer.await != Ok(0) {
+                return;
+            }
+            let _ = this.update(cx, |w, cx| {
+                w.notify_user(format!("Restoring {file} into {name}…"), false, cx);
+                w._job = Some(crate::runtime::spawn_db(
+                    cx,
+                    async move {
+                        match conn.backup() {
+                            Some(b) => {
+                                b.restore(&path, tokio_util::sync::CancellationToken::new())
+                                    .await
+                            }
+                            None => Err(types::Error::unsupported("restore")),
+                        }
+                    },
+                    move |w: &mut Self, result, cx| match result {
+                        Ok(()) => {
+                            session.update(cx, |s, cx| s.refresh(cx));
+                            w.notify_user(format!("Restored {file} into {name}"), false, cx);
+                        }
+                        Err(e) => {
+                            w.notify_user(format!("Restore into {name} failed: {e}"), true, cx)
+                        }
+                    },
+                ));
+            });
+        })
+        .detach();
+    }
+
+    fn render_notice(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+        let (text, is_error) = self.notice.clone()?;
+        Some(
+            div()
+                .absolute()
+                .bottom(px(16.))
+                .right(px(16.))
+                .max_w(px(520.))
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .px(px(14.))
+                .py(px(10.))
+                .rounded(px(8.))
+                .bg(c(theme::BG))
+                .border_1()
+                .border_color(c(if is_error {
+                    theme::DELETED_TEXT
+                } else {
+                    theme::LINE
+                }))
+                .shadow_lg()
+                .text_size(px(13.))
+                .text_color(c(if is_error {
+                    theme::DELETED_TEXT
+                } else {
+                    theme::TEXT
+                }))
+                .child(div().flex_1().min_w_0().child(SharedString::from(text)))
+                .child(
+                    ui::icon_button("dismiss-notice", "close", 22., 13.).on_click(cx.listener(
+                        |this, _, _, cx| {
+                            this.notice = None;
+                            cx.notify();
+                        },
+                    )),
+                ),
+        )
     }
 
     /// Shows the connections list.
@@ -491,6 +694,7 @@ impl Render for Workspace {
                 d.child(self.render_top_bar(cx))
             })
             .child(div().flex_1().min_h_0().child(body))
+            .children(self.render_notice(cx))
             .children(overlay)
             .child(
                 canvas(
