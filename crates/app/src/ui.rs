@@ -258,25 +258,6 @@ pub(crate) fn thousands(n: u64) -> String {
     out
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn bytes_are_pretty() {
-        assert_eq!(super::bytes(319_488), "312 kB");
-        assert_eq!(super::bytes(49_152), "48 kB");
-        assert_eq!(super::bytes(800), "800 bytes");
-        assert_eq!(super::bytes(5 * 1024 * 1024), "5 MB");
-    }
-
-    #[test]
-    fn thousands_groups_digits() {
-        assert_eq!(super::thousands(1284), "1,284");
-        assert_eq!(super::thousands(48211), "48,211");
-        assert_eq!(super::thousands(7), "7");
-        assert_eq!(super::thousands(1_000_000), "1,000,000");
-    }
-}
-
 /// A warning bar asking to confirm a write: message, then the confirm and cancel buttons.
 pub(crate) fn confirm_bar(
     message: impl Into<SharedString>,
@@ -299,4 +280,23 @@ pub(crate) fn confirm_bar(
         .child(div().flex_1().min_w_0().child(message.into()))
         .child(confirm)
         .child(cancel)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn bytes_are_pretty() {
+        assert_eq!(super::bytes(319_488), "312 kB");
+        assert_eq!(super::bytes(49_152), "48 kB");
+        assert_eq!(super::bytes(800), "800 bytes");
+        assert_eq!(super::bytes(5 * 1024 * 1024), "5 MB");
+    }
+
+    #[test]
+    fn thousands_groups_digits() {
+        assert_eq!(super::thousands(1284), "1,284");
+        assert_eq!(super::thousands(48211), "48,211");
+        assert_eq!(super::thousands(7), "7");
+        assert_eq!(super::thousands(1_000_000), "1,000,000");
+    }
 }
