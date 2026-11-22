@@ -2,10 +2,11 @@
 
 use gpui::prelude::*;
 use gpui::{
-    Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, KeyDownEvent, SharedString,
-    Subscription, Window, div, px,
+    ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, KeyDownEvent,
+    SharedString, Subscription, Window, div, px,
 };
 use gpui_component::input::{InputEvent, InputState};
+use gpui_component::text::TextView;
 use types::{FieldKind, SavedConnection, Tag};
 
 use crate::actions::{EditConnection, NewConnection};
@@ -191,7 +192,18 @@ impl ConnectionsScreen {
                     .text_ellipsis()
                     .child(SharedString::from(address(conn, cx))),
             )
-            .child(div().ml_auto().child(if selected {
+            .when(selected, |d| {
+                let edit = conn.clone();
+                d.child(div().ml_auto().child(
+                    ui::ghost_button(("edit-conn", ix), "Edit").on_click(cx.listener(
+                        move |_, _, _, cx| {
+                            cx.stop_propagation();
+                            cx.emit(ConnectionsEvent::Edit(edit.clone()));
+                        },
+                    )),
+                ))
+            })
+            .child(div().when(!selected, |d| d.ml_auto()).child(if selected {
                 div()
                     .flex()
                     .items_center()
@@ -341,6 +353,30 @@ impl Render for ConnectionsScreen {
             .child(div().flex_1().child(ui::input(&self.search, 14.)));
 
         let hint = match &self.status {
+            // ponytail: markdown view only because it is the selectable text element we have.
+            Some((text, true)) => {
+                let escaped: String = text
+                    .chars()
+                    .flat_map(|ch| {
+                        let esc = ch.is_ascii_punctuation().then_some('\\');
+                        esc.into_iter().chain([ch])
+                    })
+                    .collect();
+                let copy = text.clone();
+                div()
+                    .flex()
+                    .items_start()
+                    .justify_center()
+                    .gap(px(6.))
+                    .text_size(px(12.))
+                    .text_color(c(theme::DELETED_TEXT))
+                    .child(TextView::markdown("connect-error", escaped).selectable(true))
+                    .child(ui::icon_button("copy-error", "copy", 20., 12.).on_click(
+                        move |_, _, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(copy.clone()));
+                        },
+                    ))
+            }
             Some((text, is_error)) => div()
                 .text_size(px(12.))
                 .text_center()
@@ -354,7 +390,7 @@ impl Render for ConnectionsScreen {
                 .text_size(px(12.))
                 .text_center()
                 .text_color(c(theme::FAINT))
-                .child("Click a connection to open it · ↑↓ to move · ↵ to connect"),
+                .child("Click a connection to open it · ↑↓ to move · ↵ to connect · ⌘E to edit"),
         };
 
         div()
