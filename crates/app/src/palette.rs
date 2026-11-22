@@ -224,6 +224,7 @@ impl Palette {
 
 impl Render for Palette {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("Palette::render").entered();
         let mono = theme::mono(cx);
         let hint = |key: &'static str, text: &'static str| {
             div()

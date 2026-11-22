@@ -330,6 +330,7 @@ impl ImportPanel {
 
 impl Render for ImportPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("ImportPanel::render").entered();
         let mono = theme::mono(cx);
         let rows = self.rows.len() as u64;
         div()

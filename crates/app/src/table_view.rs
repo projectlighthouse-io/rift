@@ -1313,6 +1313,7 @@ pub(crate) fn clean_default(raw: &str) -> String {
 
 impl Render for TableView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("TableView::render").entered();
         let body = match (&self.error, self.columns.is_empty()) {
             (Some(error), true) => div()
                 .p(px(16.))

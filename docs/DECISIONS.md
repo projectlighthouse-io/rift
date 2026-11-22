@@ -298,3 +298,20 @@ Format: date, decision, reason.
   the `.icns` (iconutil).
 - **About window** from the Rift menu: icon, version, "Rift — a Project Lighthouse project".
   ⌘Q quits.
+
+## 2026-11-23 — Profiling
+
+- **samply for CPU, Tracy for frames.** `make samply` records a release-speed build and opens a
+  flamegraph in the Firefox Profiler (no code changes). `make tracy` runs a build with
+  `--features profiling`, which streams every `tracing` span to the Tracy viewer live, with a
+  frame mark per window frame, so a slow frame shows which view or database call caused it.
+  Chosen over Instruments (Xcode only), cargo-flamegraph (dtrace + sudo, static SVG) and
+  puffin (weaker viewer).
+- **`profiling` cargo profile:** release + `line-tables-only` debug info, `split-debuginfo =
+  "unpacked"` (no slow dsymutil pass). Symbols without debug-build slowness.
+- **Spans:** every view's `render` (`Type::render`), the grid's visible-row batch
+  (`Grid::rows`), and every `spawn_db` as `db` / `db applied` with the caller's file:line.
+  They are `debug` level, so normal logging (`info`) skips them for the cost of a callsite check.
+- **Tracy viewer is pinned to 0.14.1,** built from source by `make tracy-viewer` into `target/`.
+  The client (`tracy-client-sys` 0.30) speaks protocol 82; Homebrew's 0.15 viewer speaks 83 and
+  refuses the connection. Bump both together.

@@ -934,6 +934,7 @@ fn bordered_table(headers: &[&str], widths: &[f32], rows: Vec<AnyElement>) -> An
 
 impl Render for StructureView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("StructureView::render").entered();
         let mono = theme::mono(cx);
         let editable = self.editable();
         let add_column = editable.then(|| {

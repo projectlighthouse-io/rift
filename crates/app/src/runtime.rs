@@ -4,12 +4,14 @@
 //! oneshot channel and are applied with `this.update(...)`.
 
 use std::future::Future;
+use std::panic::Location;
 use std::sync::Arc;
 
 use futures::channel::oneshot;
 use futures::future::BoxFuture;
 use gpui::{App, Context, Global, Task};
 use tokio::runtime::Handle;
+use tracing::Instrument;
 use traits::Spawner;
 
 /// Runs futures and blocking work on the `rift-io` Tokio runtime.
@@ -50,6 +52,7 @@ pub(crate) fn spawner(cx: &App) -> Arc<dyn Spawner> {
 
 /// Runs `fut` on Tokio and applies its output to the view with `on_done` on the UI thread.
 /// Dropping the returned task stops `on_done` from running (the future still completes).
+#[track_caller]
 pub(crate) fn spawn_db<V, T>(
     cx: &mut Context<V>,
     fut: impl Future<Output = T> + Send + 'static,
@@ -59,12 +62,18 @@ where
     V: 'static,
     T: Send + 'static,
 {
+    // Named by the caller's file:line so a profiler shows which load it was.
+    let at = Location::caller();
     let (tx, rx) = oneshot::channel();
-    cx.global::<Io>().0.spawn(Box::pin(async move {
-        let _ = tx.send(fut.await);
-    }));
+    cx.global::<Io>().0.spawn(Box::pin(
+        async move {
+            let _ = tx.send(fut.await);
+        }
+        .instrument(tracing::debug_span!("db", %at)),
+    ));
     cx.spawn(async move |this, cx| {
         if let Ok(value) = rx.await {
+            let _span = tracing::debug_span!("db applied", %at).entered();
             let _ = this.update(cx, |view, cx| on_done(view, value, cx));
         }
     })

@@ -462,6 +462,7 @@ impl DashboardView {
 
 impl Render for DashboardView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("DashboardView::render").entered();
         let count = self.dashboard.cards.len();
         let header =
             div()

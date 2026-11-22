@@ -513,6 +513,7 @@ fn group_digits(text: &str) -> String {
 
 impl Render for Grid {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("Grid::render").entered();
         let mono = theme::mono(cx);
         let count = self.rows.len();
         if let Some(pos) = self.autoscroll.filter(|_| count > 10_000) {
@@ -548,6 +549,8 @@ impl Render for Grid {
                             "grid-rows",
                             count,
                             cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
+                                let _span =
+                                    tracing::debug_span!("Grid::rows", n = range.len()).entered();
                                 range
                                     .map(|ix| this.render_row(ix, row_mono.clone(), cx))
                                     .collect()

@@ -41,6 +41,7 @@ struct AboutView;
 
 impl Render for AboutView {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("AboutView::render").entered();
         let image = std::sync::Arc::new(gpui::Image::from_bytes(
             gpui::ImageFormat::Png,
             ICON.to_vec(),

@@ -894,6 +894,7 @@ impl Session {
 
 impl Render for Session {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("Session::render").entered();
         let content = self.active.and_then(|ix| self.docs.get(ix)).map(Doc::view);
         let sidebar = match (&self.directories, &self.keys) {
             (Some(tree), _) => tree.clone().into_any_element(),

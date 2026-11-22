@@ -232,6 +232,7 @@ impl ConnectionsScreen {
 
 impl Render for ConnectionsScreen {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("ConnectionsScreen::render").entered();
         let visible: Vec<SavedConnection> = self.visible(cx).into_iter().cloned().collect();
         let mut card = div()
             .flex()

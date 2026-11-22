@@ -255,6 +255,7 @@ fn natural(a: &str, b: &str) -> std::cmp::Ordering {
 
 impl Render for KeyTree {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("KeyTree::render").entered();
         let mono = theme::mono(cx);
         let database = self
             .conn
@@ -1191,6 +1192,7 @@ impl KeyView {
 
 impl Render for KeyView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("KeyView::render").entered();
         if let Some(seed) = self.string_seed.take() {
             self.string_input =
                 Some(cx.new(|cx| {
@@ -1369,6 +1371,7 @@ fn bar_row(
 
 impl Render for MemoryPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("MemoryPanel::render").entered();
         let mono = theme::mono(cx);
         let title = |t: &'static str| {
             div()

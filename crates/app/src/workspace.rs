@@ -646,6 +646,13 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // The root view renders once per window frame: mark it so Tracy splits the timeline
+        // into frames.
+        #[cfg(feature = "profiling")]
+        if let Some(client) = tracy_client::Client::running() {
+            client.frame_mark();
+        }
+        let _span = tracing::debug_span!("Workspace::render").entered();
         let started = Instant::now();
         let body: AnyElement = match (
             &self.start,

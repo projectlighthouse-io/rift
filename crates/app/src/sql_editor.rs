@@ -1044,6 +1044,7 @@ impl Drop for SqlEditor {
 
 impl Render for SqlEditor {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("SqlEditor::render").entered();
         let mono = theme::mono(cx);
         div()
             .id("sql-editor")

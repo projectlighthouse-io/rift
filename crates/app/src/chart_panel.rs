@@ -339,6 +339,7 @@ impl ChartPanel {
 
 impl Render for ChartPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("ChartPanel::render").entered();
         let title = self.title(cx);
         let range = self.data.as_ref().and_then(chart::date_range);
         let body = match (self.model(), &self.error) {

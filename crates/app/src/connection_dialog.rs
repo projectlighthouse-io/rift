@@ -403,6 +403,7 @@ fn row() -> gpui::Div {
 
 impl Render for ConnectionDialog {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("ConnectionDialog::render").entered();
         let mono = theme::mono(cx);
         let title = if self.editing.is_some() {
             "Edit connection"

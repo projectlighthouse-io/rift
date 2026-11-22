@@ -69,6 +69,7 @@ impl Dropdown {
 
 impl Render for Dropdown {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _span = tracing::debug_span!("Dropdown::render").entered();
         let mono = theme::mono(cx);
         let font = |d: gpui::Div| {
             if self.mono {
