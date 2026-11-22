@@ -1,4 +1,4 @@
-.PHONY: dev-up dev-seed dev-down fdb-test samply tracy tracy-viewer
+.PHONY: dev-up dev-seed dev-down fdb-test samply tracy tracy-viewer tracy-open
 
 # Start local databases and wait until they are healthy.
 dev-up:
@@ -25,7 +25,8 @@ dev-down:
 # --- Profiling (see docs/DECISIONS.md, "Profiling") ---------------------------------------------
 
 # Tracy viewer matching the client bundled by tracy-client-sys (protocol 82 = Tracy 0.14.1).
-# Homebrew ships a newer viewer that refuses to connect, so build this one once.
+# Homebrew ships a newer viewer that refuses to connect, so build this one once. Built without
+# its file selector (nfd's Linux submodule hangs cloning from freedesktop.org); use tracy-open.
 TRACY_VERSION := v0.14.1
 TRACY := target/tracy-$(TRACY_VERSION)/profiler/build/tracy-profiler
 
@@ -44,7 +45,11 @@ tracy: $(TRACY)
 
 tracy-viewer: $(TRACY)
 
+# Open a saved trace, picked with the native macOS file dialog.
+tracy-open: $(TRACY)
+	$(TRACY) "$$(osascript -e 'POSIX path of (choose file with prompt "Open Tracy trace")')" &
+
 $(TRACY):
-	git clone -q --depth 1 -b $(TRACY_VERSION) https://github.com/wolfpld/tracy target/tracy-$(TRACY_VERSION)
-	cmake -B target/tracy-$(TRACY_VERSION)/profiler/build -S target/tracy-$(TRACY_VERSION)/profiler -DCMAKE_BUILD_TYPE=Release
+	test -d target/tracy-$(TRACY_VERSION) || git clone -q --depth 1 -b $(TRACY_VERSION) https://github.com/wolfpld/tracy target/tracy-$(TRACY_VERSION)
+	cmake -B target/tracy-$(TRACY_VERSION)/profiler/build -S target/tracy-$(TRACY_VERSION)/profiler -DCMAKE_BUILD_TYPE=Release -DNO_FILESELECTOR=ON
 	cmake --build target/tracy-$(TRACY_VERSION)/profiler/build --parallel
