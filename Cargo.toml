@@ -91,3 +91,8 @@ must_use_candidate = "warn"
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
+# GPUI is unusably slow unoptimized (laggy scroll). Optimize dependencies in dev builds; our own
+# crates stay quick to rebuild. Deps are compiled once, so this costs little day to day.
+[profile.dev.package."*"]
+opt-level = 2
