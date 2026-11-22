@@ -532,6 +532,9 @@ impl Render for Grid {
             .id("grid-h")
             .size_full()
             .overflow_x_scroll()
+            // Without this GPUI turns vertical wheel deltas into horizontal scroll here (this
+            // div only overflows on x), so scrolling rows also drifts sideways.
+            .restrict_scroll_to_axis()
             .capture_key_down(cx.listener(Self::on_key))
             .child(
                 div()
@@ -551,6 +554,11 @@ impl Render for Grid {
                             }),
                         )
                         .flex_1()
+                        // The mirror case: a sideways swipe must not scroll rows.
+                        .map(|mut list| {
+                            list.style().restrict_scroll_to_axis = Some(true);
+                            list
+                        })
                         .track_scroll(&self.scroll),
                     ),
             )
