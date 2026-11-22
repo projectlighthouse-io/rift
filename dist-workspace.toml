@@ -6,9 +6,9 @@ members = ["cargo:."]
 cargo-dist-version = "0.34.0"
 ci = "github"
 installers = ["shell", "powershell", "homebrew"]
-# The tap repository must exist and HOMEBREW_TAP_TOKEN must be a repo secret.
+# The formula ships as a release artifact. To publish it, create the tap repository, add a
+# HOMEBREW_TAP_TOKEN secret, and add: publish-jobs = ["homebrew"]
 tap = "projectlighthouse-io/homebrew-tap"
-publish-jobs = ["homebrew"]
 targets = [
   "aarch64-apple-darwin",
   "x86_64-apple-darwin",

@@ -288,8 +288,9 @@ Format: date, decision, reason.
 - **Releases come from `dist` (cargo-dist 0.34)**, configured in `dist-workspace.toml`:
   macOS arm64 and x86_64, Linux x86_64 and aarch64 (native ARM runner), Windows x64; shell,
   PowerShell and Homebrew installers. Pushing a `v*` tag runs `.github/workflows/release.yml`.
-  The Homebrew job needs the `projectlighthouse-io/homebrew-tap` repository and a
-  `HOMEBREW_TAP_TOKEN` secret. macOS ships two per-architecture archives rather than one
+  The Homebrew formula ships as a release artifact; publishing it to
+  `projectlighthouse-io/homebrew-tap` is off until that repository and a `HOMEBREW_TAP_TOKEN`
+  secret exist. macOS ships two per-architecture archives rather than one
   universal binary; Homebrew and the installer pick the right one.
 - **Release builds use the `dist` profile** (release + thin LTO).
 - **The icon is an SVG** (`crates/app/assets/icon/rift.svg`): the coral database with a
