@@ -247,10 +247,12 @@ impl TableView {
             async move {
                 let browse = conn.browse().ok_or_else(|| Error::unsupported("browse"))?;
                 let started = Instant::now();
-                let page = browse.rows(&table, &request).await?;
-                let elapsed = started.elapsed();
-                let total = browse.count(&table, &request).await?;
-                Ok::<_, Error>((page, elapsed, total))
+                let rows = async {
+                    let page = browse.rows(&table, &request).await;
+                    (page, started.elapsed())
+                };
+                let ((page, elapsed), total) = futures::join!(rows, browse.count(&table, &request));
+                Ok::<_, Error>((page?, elapsed, total?))
             },
             move |this, result, cx| {
                 match result {

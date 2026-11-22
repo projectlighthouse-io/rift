@@ -173,15 +173,20 @@ impl Session {
             cx,
             async move {
                 let browse = conn.browse().ok_or_else(|| Error::unsupported("browse"))?;
-                let schema = match wanted {
-                    Some(s) => Some(s),
-                    None => browse.default_schema().await?,
+                let objects = async {
+                    let schema = match wanted {
+                        Some(s) => Some(s),
+                        None => browse.default_schema().await?,
+                    };
+                    let objects = match &schema {
+                        Some(s) => browse.objects(s).await?,
+                        None => Vec::new(),
+                    };
+                    Ok::<_, Error>((schema, objects))
                 };
-                let objects = match &schema {
-                    Some(s) => browse.objects(s).await?,
-                    None => Vec::new(),
-                };
-                let schemas = browse.schemas().await.unwrap_or_default();
+                let (objects, schemas) = futures::join!(objects, browse.schemas());
+                let (schema, objects) = objects?;
+                let schemas = schemas.unwrap_or_default();
                 Ok::<_, Error>((schema, objects, schemas))
             },
             |this, result, cx| {

@@ -11,8 +11,7 @@ use types::{
     ConnConfig, ConnectionInfo, DriverInfo, Error, Family, FieldKind, FieldSpec, SafeMode, TlsMode,
 };
 
-use crate::connection::PgConnection;
-use crate::error;
+use crate::connection::{Describer, PgConnection};
 
 const DEFAULT_PORT: u16 = 5432;
 
@@ -57,8 +56,6 @@ fn options(config: &ConnConfig) -> Result<PgConnectOptions, Error> {
         .username(config.get("user").unwrap_or("postgres"))
         .database(config.get("database").unwrap_or("postgres"))
         .application_name("rift")
-        // Schemas change under a database client; cached `SELECT *` metadata goes stale.
-        .statement_cache_capacity(0)
         .ssl_mode(match config.tls {
             TlsMode::Require => PgSslMode::Require,
             TlsMode::Prefer => PgSslMode::Prefer,
@@ -88,22 +85,38 @@ impl DriverFactory for PgFactory {
             let pool = PgPoolOptions::new()
                 .max_connections(8)
                 .acquire_timeout(Duration::from_secs(10))
-                .connect_with(options.clone())
-                .await
-                .map_err(|e| match e {
-                    sqlx::Error::Database(db) => Error::connect(db.message()),
-                    other => Error::connect(other.to_string()),
-                })?;
-            let version: String = sqlx::query_scalar("SHOW server_version")
-                .fetch_one(&pool)
-                .await
-                .map_err(error::map)?;
-            // `16.4 (Debian 16.4-1)` → `16`: since 10, the first number is the major version.
-            let major = version
-                .split(|c: char| c == '.' || c.is_whitespace())
-                .next()
-                .unwrap_or(&version)
-                .to_owned();
+                // Every round trip counts on a far-away server: only ping a connection that has
+                // sat idle long enough for a proxy or firewall to have dropped it.
+                .test_before_acquire(false)
+                .before_acquire(|conn, meta| {
+                    Box::pin(async move {
+                        if meta.idle_for > Duration::from_secs(60) {
+                            sqlx::Connection::ping(conn).await?;
+                        }
+                        Ok(true)
+                    })
+                })
+                .connect_lazy_with(options.clone());
+            // One connection up front, bounded by `acquire_timeout`: it reports errors and the
+            // server version (sent at startup, so no query).
+            let first = pool.acquire().await.map_err(|e| match e {
+                sqlx::Error::Database(db) => Error::connect(db.message()),
+                other => Error::connect(other.to_string()),
+            })?;
+            // Since 10, `server_version_num` is major * 10000 + minor.
+            let major = first.server_version_num().unwrap_or(0) / 10_000;
+            drop(first);
+            let describer = Describer::new(&options, None);
+            let (warm, warm_describer) = (pool.clone(), describer.clone());
+            deps.spawner.spawn(
+                async move {
+                    // The rest open in the background, all at once instead of one after another.
+                    // ponytail: 4 covers the widest fan-out (describe); the pool grows past it.
+                    let pool = futures::future::join_all((0..4).map(|_| warm.acquire()));
+                    let _ = futures::join!(pool, warm_describer.columns("SELECT 1".into()));
+                }
+                .boxed(),
+            );
             let info = ConnectionInfo {
                 driver: "postgres".into(),
                 server_version: format!("PostgreSQL {major}"),
@@ -116,6 +129,7 @@ impl DriverFactory for PgFactory {
             };
             Ok(Arc::new(PgConnection {
                 pool,
+                describer,
                 options,
                 spawner: deps.spawner.clone(),
                 info,

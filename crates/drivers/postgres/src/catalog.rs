@@ -2,8 +2,9 @@
 
 use dialect::{Dialect, rows};
 use futures::future::BoxFuture;
-use futures::{FutureExt, TryStreamExt};
-use sqlx::{AssertSqlSafe, Column as _, Executor, SqlSafeStr, Statement, TypeInfo};
+use futures::{FutureExt, TryFutureExt, TryStreamExt};
+use sqlx::postgres::PgRow;
+use sqlx::{AssertSqlSafe, FromRow, Row as _};
 use traits::{Browse, Describe};
 use types::{
     Column, ColumnDef, ColumnRef, DbObject, Error, ForeignKeyDef, IndexDef, ObjectKind, Page, Row,
@@ -12,7 +13,7 @@ use types::{
 
 use crate::connection::PgConnection;
 use crate::error;
-use crate::query::decode_row;
+use crate::query::{decode_row, row_columns};
 
 const SCHEMAS: &str = "SELECT nspname::text FROM pg_namespace \
     WHERE nspname NOT LIKE 'pg\\_%' AND nspname <> 'information_schema' ORDER BY 1";
@@ -131,13 +132,28 @@ fn short_type(name: &str) -> String {
 }
 
 impl PgConnection {
-    async fn column_defs(&self, table: &TableRef) -> Result<Vec<ColumnDef>, Error> {
-        let quoted = Dialect::Postgres.table(table);
-        let rows: Vec<ColumnRow> = sqlx::query_as(COLUMNS)
-            .bind(&quoted)
-            .fetch_all(&self.pool)
+    /// Runs catalog `sql` with `$1` replaced by `arg` as a quoted literal. The simple protocol
+    /// answers in one round trip on any pooled connection; a bound parameter would cost a
+    /// prepare first on every connection that hasn't run that statement yet.
+    async fn catalog<T>(&self, sql: &str, arg: &str) -> Result<Vec<T>, Error>
+    where
+        T: for<'r> FromRow<'r, PgRow>,
+    {
+        let sql = sql.replace("$1", &Dialect::Postgres.string(arg));
+        let rows: Vec<PgRow> = sqlx::raw_sql(AssertSqlSafe(sql))
+            .fetch(&self.pool)
+            .try_collect()
             .await
             .map_err(error::map)?;
+        rows.iter()
+            .map(T::from_row)
+            .collect::<Result<_, _>>()
+            .map_err(error::map)
+    }
+
+    async fn column_defs(&self, table: &TableRef) -> Result<Vec<ColumnDef>, Error> {
+        let quoted = Dialect::Postgres.table(table);
+        let rows: Vec<ColumnRow> = self.catalog(COLUMNS, &quoted).await?;
         if rows.is_empty() {
             return Err(Error::not_found(table.to_string()));
         }
@@ -166,22 +182,21 @@ impl PgConnection {
 impl Browse for PgConnection {
     fn schemas(&self) -> BoxFuture<'_, Result<Vec<SchemaName>, Error>> {
         async move {
-            let names: Vec<String> = sqlx::query_scalar(SCHEMAS)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(error::map)?;
-            Ok(names.into_iter().map(SchemaName::new).collect())
+            let names: Vec<(String,)> = self.catalog(SCHEMAS, "").await?;
+            Ok(names.into_iter().map(|(n,)| SchemaName::new(n)).collect())
         }
         .boxed()
     }
 
     fn default_schema(&self) -> BoxFuture<'_, Result<Option<SchemaName>, Error>> {
         async move {
-            let name: Option<String> = sqlx::query_scalar("SELECT current_schema()::text")
-                .fetch_one(&self.pool)
-                .await
-                .map_err(error::map)?;
-            Ok(name.map(SchemaName::new))
+            let name: Vec<(Option<String>,)> =
+                self.catalog("SELECT current_schema()::text", "").await?;
+            Ok(name
+                .into_iter()
+                .next()
+                .and_then(|(n,)| n)
+                .map(SchemaName::new))
         }
         .boxed()
     }
@@ -191,11 +206,8 @@ impl Browse for PgConnection {
         schema: &'a SchemaName,
     ) -> BoxFuture<'a, Result<Vec<DbObject>, Error>> {
         async move {
-            let rows: Vec<(String, String, Option<i64>)> = sqlx::query_as(OBJECTS)
-                .bind(schema.as_str())
-                .fetch_all(&self.pool)
-                .await
-                .map_err(error::map)?;
+            let rows: Vec<(String, String, Option<i64>)> =
+                self.catalog(OBJECTS, schema.as_str()).await?;
             Ok(rows
                 .into_iter()
                 .map(|(name, kind, estimate)| DbObject {
@@ -220,35 +232,34 @@ impl Browse for PgConnection {
         request: &'a RowsRequest,
     ) -> BoxFuture<'a, Result<Page, Error>> {
         async move {
-            let defs = self.column_defs(table).await?;
             let sql = rows::select_rows(Dialect::Postgres, table, request);
-            let mut conn = self.pool.acquire().await.map_err(error::map)?;
-            let described = (&mut *conn)
-                .prepare(AssertSqlSafe(sql.clone()).into_sql_str())
-                .await
-                .map_err(error::map)?;
-            let type_names: Vec<String> = described
-                .columns()
-                .iter()
-                .map(|c| c.type_info().name().to_lowercase())
-                .collect();
-            let data: Vec<sqlx::postgres::PgRow> = sqlx::raw_sql(AssertSqlSafe(sql))
-                .fetch(&mut *conn)
-                .try_collect()
-                .await
-                .map_err(error::map)?;
-            let columns = described
-                .columns()
-                .iter()
-                .zip(&type_names)
-                .map(|(c, ty)| {
-                    let def = defs.iter().find(|d| d.name.as_str() == c.name());
+            let select = sqlx::raw_sql(AssertSqlSafe(sql))
+                .fetch(&self.pool)
+                .try_collect::<Vec<sqlx::postgres::PgRow>>()
+                .map_err(error::map);
+            let (defs, data) = futures::try_join!(self.column_defs(table), select)?;
+            // `SELECT *` is the table's columns in order; with no rows, the catalog says what
+            // they are.
+            let raw = match data.first() {
+                Some(row) => row_columns(row),
+                None => defs
+                    .iter()
+                    .map(|d| types::Column::new(d.name.as_str(), d.type_name.clone()))
+                    .collect(),
+            };
+            let type_names: Vec<String> = raw.iter().map(|c| c.type_name.clone()).collect();
+            let columns = raw
+                .into_iter()
+                .map(|c| {
+                    let def = defs.iter().find(|d| d.name == c.name);
                     let shown = match def {
-                        Some(d) if d.type_name.starts_with("char(") => d.type_name.clone(),
-                        _ => ty.clone(),
+                        Some(d) if d.type_name.starts_with("char(") || c.type_name == "?" => {
+                            d.type_name.clone()
+                        }
+                        _ => c.type_name,
                     };
                     Column {
-                        name: c.name().into(),
+                        name: c.name,
                         type_name: shown,
                         nullable: def.map(|d| d.nullable),
                         primary_key: def.is_some_and(|d| d.primary_key),
@@ -276,10 +287,11 @@ impl Browse for PgConnection {
     ) -> BoxFuture<'a, Result<u64, Error>> {
         async move {
             let sql = rows::count_rows(Dialect::Postgres, table, request);
-            let n: i64 = sqlx::query_scalar(AssertSqlSafe(sql))
+            let row = sqlx::raw_sql(AssertSqlSafe(sql))
                 .fetch_one(&self.pool)
                 .await
                 .map_err(error::map)?;
+            let n: i64 = row.try_get(0).map_err(error::map)?;
             Ok(n as u64)
         }
         .boxed()
@@ -293,23 +305,16 @@ impl Describe for PgConnection {
     ) -> BoxFuture<'a, Result<TableDescription, Error>> {
         async move {
             let quoted = Dialect::Postgres.table(table);
-            let columns = self.column_defs(table).await?;
-            let index_rows: Vec<(String, bool, bool, String, i64, Vec<String>)> =
-                sqlx::query_as(INDEXES)
-                    .bind(&quoted)
-                    .fetch_all(&self.pool)
-                    .await
-                    .map_err(error::map)?;
-            let fk_rows: Vec<FkRow> = sqlx::query_as(FOREIGN_KEYS)
-                .bind(&quoted)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(error::map)?;
-            let (row_estimate, size): (i64, i64) = sqlx::query_as(TABLE_STATS)
-                .bind(&quoted)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(error::map)?;
+            let (columns, index_rows, fk_rows, stats) = futures::try_join!(
+                self.column_defs(table),
+                self.catalog::<(String, bool, bool, String, i64, Vec<String>)>(INDEXES, &quoted),
+                self.catalog::<FkRow>(FOREIGN_KEYS, &quoted),
+                self.catalog::<(i64, i64)>(TABLE_STATS, &quoted),
+            )?;
+            let (row_estimate, size) = stats
+                .into_iter()
+                .next()
+                .ok_or_else(|| Error::not_found(table.to_string()))?;
             Ok(TableDescription {
                 table: table.clone(),
                 columns,
@@ -385,15 +390,14 @@ impl Describe for PgConnection {
                 ));
             }
             let mut ddl = format!("CREATE TABLE {quoted} (\n{}\n);", lines.join(",\n"));
-            let defs: Vec<String> = sqlx::query_scalar(
-                "SELECT pg_get_indexdef(indexrelid) FROM pg_index \
-                 WHERE indrelid = to_regclass($1) AND NOT indisprimary ORDER BY 1",
-            )
-            .bind(&quoted)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(error::map)?;
-            for def in defs {
+            let defs: Vec<(String,)> = self
+                .catalog(
+                    "SELECT pg_get_indexdef(indexrelid) FROM pg_index \
+                     WHERE indrelid = to_regclass($1) AND NOT indisprimary ORDER BY 1",
+                    &quoted,
+                )
+                .await?;
+            for (def,) in defs {
                 ddl.push_str(&format!("\n{def};"));
             }
             Ok(ddl)

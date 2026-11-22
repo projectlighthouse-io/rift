@@ -3,39 +3,28 @@
 use dialect::{Dialect, chart};
 use futures::future::{self, BoxFuture, Either};
 use futures::{FutureExt, TryStreamExt};
-use sqlx::{AssertSqlSafe, Column, Executor, SqlSafeStr, Statement, TypeInfo};
+use sqlx::AssertSqlSafe;
 use tokio_util::sync::CancellationToken;
 use traits::{Aggregate, ColumnStats};
 use types::{AggregateRequest, ChartData, ColumnName, ColumnStatsReport, Error, TableRef, Value};
 
 use crate::connection::PgConnection;
 use crate::error;
-use crate::query::decode_row;
+use crate::query::{decode_row, row_columns};
 
 impl PgConnection {
     /// Every row of `sql`, decoded.
     pub(crate) async fn fetch_values(&self, sql: String) -> Result<Vec<Vec<Value>>, Error> {
-        let mut conn = self.pool.acquire().await.map_err(error::map)?;
-        let stmt = (&mut *conn)
-            .prepare(AssertSqlSafe(sql.clone()).into_sql_str())
-            .await
-            .map_err(error::map)?;
-        let types: Vec<String> = stmt
-            .columns()
-            .iter()
-            .map(|c| type_name(c.type_info()))
-            .collect();
         let rows: Vec<sqlx::postgres::PgRow> = sqlx::raw_sql(AssertSqlSafe(sql))
-            .fetch(&mut *conn)
+            .fetch(&self.pool)
             .try_collect()
             .await
             .map_err(error::map)?;
+        let types: Vec<String> = rows.first().map_or_else(Vec::new, |r| {
+            row_columns(r).into_iter().map(|c| c.type_name).collect()
+        });
         Ok(rows.iter().map(|r| decode_row(r, &types)).collect())
     }
-}
-
-fn type_name(info: &impl TypeInfo) -> String {
-    info.name().to_lowercase()
 }
 
 impl Aggregate for PgConnection {

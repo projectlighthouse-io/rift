@@ -24,4 +24,4 @@ tokio-util = { workspace = true }
 
 [dev-dependencies]
 testkit = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["net", "io-util"] }

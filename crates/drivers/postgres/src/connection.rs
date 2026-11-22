@@ -5,8 +5,11 @@ use std::time::{Duration, Instant};
 
 use futures::FutureExt;
 use futures::future::BoxFuture;
-use sqlx::PgPool;
+use futures::lock::Mutex;
 use sqlx::postgres::PgConnectOptions;
+use sqlx::{
+    AssertSqlSafe, Column, ConnectOptions, Executor, PgPool, SqlSafeStr, Statement, TypeInfo,
+};
 use traits::{
     Aggregate, Backup, Browse, ColumnStats, Connection, Describe, EditRows, EditSchema, Explain,
     Query, Spawner, Transactions,
@@ -18,12 +21,55 @@ use crate::error;
 /// A pooled Postgres connection.
 pub(crate) struct PgConnection {
     pub(crate) pool: PgPool,
-    /// Used to open a side connection for `pg_cancel_backend`.
+    /// Reads result column types for user SQL.
+    pub(crate) describer: Describer,
+    /// For `pg_dump` and `psql`.
     pub(crate) options: PgConnectOptions,
     pub(crate) spawner: Arc<dyn Spawner>,
     pub(crate) info: ConnectionInfo,
     /// For `pg_dump` and `psql`.
     pub(crate) password: Option<String>,
+}
+
+/// A side connection that only describes statements. It has no statement cache, so a table
+/// changed by `ALTER TABLE` is never described from stale metadata; the pool keeps its cache for
+/// the fixed catalog queries.
+#[derive(Clone)]
+pub(crate) struct Describer {
+    conn: Arc<Mutex<Option<sqlx::PgConnection>>>,
+    options: PgConnectOptions,
+}
+
+impl Describer {
+    pub(crate) fn new(options: &PgConnectOptions, conn: Option<sqlx::PgConnection>) -> Self {
+        Self {
+            conn: Arc::new(Mutex::new(conn)),
+            options: options.clone().statement_cache_capacity(0),
+        }
+    }
+
+    /// Result columns of `sql`, or `None` when it can't be described here (several statements,
+    /// a temp table from another session, a dropped connection).
+    pub(crate) async fn columns(&self, sql: String) -> Option<Vec<types::Column>> {
+        let mut slot = self.conn.lock().await;
+        if slot.is_none() {
+            *slot = self.options.connect().await.ok();
+        }
+        let conn = slot.as_mut()?;
+        match conn.prepare(AssertSqlSafe(sql).into_sql_str()).await {
+            Ok(stmt) => Some(
+                stmt.columns()
+                    .iter()
+                    .map(|c| types::Column::new(c.name(), c.type_info().name().to_lowercase()))
+                    .collect(),
+            ),
+            Err(sqlx::Error::Database(_)) => None,
+            Err(_) => {
+                *slot = None;
+                None
+            }
+        }
+    }
 }
 
 impl Connection for PgConnection {
