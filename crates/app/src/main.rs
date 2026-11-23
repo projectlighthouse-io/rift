@@ -76,16 +76,31 @@ fn main() -> anyhow::Result<()> {
                 return;
             }
             open_main_window(cx);
-            cx.activate(true);
+            if !background() {
+                cx.activate(true);
+            }
         });
     drop(runtime);
     Ok(())
+}
+
+/// Dev check: `RIFT_DEV_BACKGROUND=1` opens the window without taking focus, so automated
+/// screenshots don't steal the keyboard.
+fn background() -> bool {
+    std::env::var_os("RIFT_DEV_BACKGROUND").is_some()
 }
 
 fn open_main_window(cx: &mut App) {
     let bounds = Bounds::centered(None, size(px(1440.), px(900.)), cx);
     let options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
+        focus: !background(),
+        // Above other windows (so it keeps drawing) without taking the keyboard.
+        kind: if background() {
+            gpui::WindowKind::PopUp
+        } else {
+            gpui::WindowKind::Normal
+        },
         ..WindowOptions::default()
     };
     let opened = cx.open_window(options, |window, cx| {
