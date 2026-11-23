@@ -371,7 +371,7 @@ fn label(text: impl Into<SharedString>) -> gpui::Div {
         .child(text.into())
 }
 
-fn boxed(child: impl IntoElement, mono: SharedString) -> gpui::Div {
+fn boxed(child: impl IntoElement) -> gpui::Div {
     div()
         .flex()
         .items_center()
@@ -381,7 +381,6 @@ fn boxed(child: impl IntoElement, mono: SharedString) -> gpui::Div {
         .bg(c(theme::BG))
         .border_1()
         .border_color(c(theme::LINE))
-        .font_family(mono)
         .text_size(px(13.))
         .child(div().flex_1().child(child))
 }
@@ -404,7 +403,6 @@ fn row() -> gpui::Div {
 impl Render for ConnectionDialog {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _span = tracing::debug_span!("ConnectionDialog::render").entered();
-        let mono = theme::mono(cx);
         let title = if self.editing.is_some() {
             "Edit connection"
         } else {
@@ -415,10 +413,7 @@ impl Render for ConnectionDialog {
         body = body.child(
             row()
                 .child(column("Type", self.driver.clone()))
-                .child(column(
-                    "Name",
-                    boxed(ui::input(&self.name, 13.), mono.clone()),
-                )),
+                .child(column("Name", boxed(ui::input(&self.name, 13.)))),
         );
 
         let basic: Vec<usize> = (0..self.fields.len())
@@ -429,7 +424,7 @@ impl Render for ConnectionDialog {
             .collect();
         let field_control = |this: &Self, ix: usize, cx: &mut Context<Self>| {
             let field = &this.fields[ix];
-            let input = boxed(ui::input(&field.input, 13.), mono.clone());
+            let input = boxed(ui::input(&field.input, 13.));
             if field.spec.kind == FieldKind::File {
                 row()
                     .gap(px(8.))
@@ -562,25 +557,18 @@ impl Render for ConnectionDialog {
                 }))
                 .child(
                     row()
-                        .child(column(
-                            "SSH host",
-                            boxed(ui::input(&self.ssh_host, 13.), mono.clone()),
-                        ))
-                        .child(div().w(px(96.)).flex_none().child(column(
-                            "SSH port",
-                            boxed(ui::input(&self.ssh_port, 13.), mono.clone()),
-                        ))),
+                        .child(column("SSH host", boxed(ui::input(&self.ssh_host, 13.))))
+                        .child(
+                            div()
+                                .w(px(96.))
+                                .flex_none()
+                                .child(column("SSH port", boxed(ui::input(&self.ssh_port, 13.)))),
+                        ),
                 )
                 .child(
                     row()
-                        .child(column(
-                            "SSH user",
-                            boxed(ui::input(&self.ssh_user, 13.), mono.clone()),
-                        ))
-                        .child(column(
-                            "SSH key",
-                            boxed(ui::input(&self.ssh_key, 13.), mono.clone()),
-                        )),
+                        .child(column("SSH user", boxed(ui::input(&self.ssh_user, 13.))))
+                        .child(column("SSH key", boxed(ui::input(&self.ssh_key, 13.)))),
                 );
         }
 

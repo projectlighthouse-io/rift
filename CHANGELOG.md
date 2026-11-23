@@ -5,6 +5,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- New typefaces: Inter for the interface and data (numbers line up in the grid), JetBrains Mono
+  only for SQL, DDL and JSON. Both are bundled with the app.
+
 ### Added
 
 - Edit button on the selected saved connection (also ⌘E, now shown in the hint line).

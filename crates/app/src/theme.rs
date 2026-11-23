@@ -2,7 +2,7 @@
 //! The set is complete on purpose; some tokens are first used by later screens.
 #![allow(dead_code)]
 
-use gpui::{App, Global, Hsla, Rgba, SharedString, rgb};
+use gpui::{App, Hsla, Rgba, SharedString, rgb};
 
 /// A hex colour token.
 pub(crate) fn c(hex: u32) -> Rgba {
@@ -58,40 +58,22 @@ pub(crate) fn tag_color(tag: types::Tag) -> u32 {
     }
 }
 
-/// UI font family (bundled).
-pub(crate) const SERIF: &str = "Source Serif 4";
+/// Font for all interface text and grid data (bundled).
+pub(crate) const SANS: &str = "Inter";
 
-/// Fonts resolved at startup.
-pub(crate) struct Fonts {
-    /// Monospace family for data, SQL, keys and table names.
-    pub(crate) mono: SharedString,
-}
+/// Font only where code is read or written: SQL editor, SQL/DDL previews, JSON values (bundled).
+const MONO: &str = "JetBrains Mono";
 
-impl Global for Fonts {}
-
-/// Picks the first installed monospace family.
 pub(crate) fn init(cx: &mut App) {
-    let installed = cx.text_system().all_font_names();
-    let mono = [
-        "SF Mono",
-        "Menlo",
-        "JetBrains Mono",
-        "Consolas",
-        "DejaVu Sans Mono",
-    ]
-    .into_iter()
-    .find(|name| installed.iter().any(|f| f == name))
-    .unwrap_or("Menlo");
-    cx.set_global(Fonts { mono: mono.into() });
     // The SQL editor (gpui-component) reads its font from the component theme.
     let component = gpui_component::Theme::global_mut(cx);
-    component.mono_font_family = mono.into();
+    component.mono_font_family = MONO.into();
     component.mono_font_size = gpui::px(13.);
 }
 
-/// The monospace family.
-pub(crate) fn mono(cx: &App) -> SharedString {
-    cx.global::<Fonts>().mono.clone()
+/// The code font family.
+pub(crate) fn mono(_: &App) -> SharedString {
+    MONO.into()
 }
 
 /// Converts a token to `Hsla`.

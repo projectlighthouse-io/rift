@@ -184,7 +184,6 @@ impl ConnectionsScreen {
             )
             .child(
                 div()
-                    .font_family(theme::mono(cx))
                     .text_size(px(12.))
                     .text_color(c(theme::FAINT))
                     .overflow_hidden()
@@ -216,7 +215,7 @@ impl ConnectionsScreen {
                     .text_size(px(12.5))
                     .font_weight(FontWeight::MEDIUM)
                     .child("Connect")
-                    .child(ui::kbd("↵", cx).opacity(0.85))
+                    .child(ui::kbd("↵").opacity(0.85))
             } else {
                 div()
                     .text_size(px(12.))

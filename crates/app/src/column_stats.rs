@@ -57,7 +57,7 @@ impl ColumnStatsView {
     }
 }
 
-fn stat(label: &'static str, value: String, mono: SharedString) -> impl IntoElement {
+fn stat(label: &'static str, value: String) -> impl IntoElement {
     div()
         .flex()
         .flex_col()
@@ -72,7 +72,6 @@ fn stat(label: &'static str, value: String, mono: SharedString) -> impl IntoElem
         )
         .child(
             div()
-                .font_family(mono)
                 .text_size(px(12.5))
                 .overflow_hidden()
                 .whitespace_nowrap()
@@ -84,7 +83,6 @@ fn stat(label: &'static str, value: String, mono: SharedString) -> impl IntoElem
 impl Render for ColumnStatsView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _span = tracing::debug_span!("ColumnStatsView::render").entered();
-        let mono = theme::mono(cx);
         let body = match &self.report {
             None => div()
                 .text_size(px(12.5))
@@ -111,14 +109,13 @@ impl Render for ColumnStatsView {
                         div()
                             .flex()
                             .gap(px(12.))
-                            .child(stat("Rows", ui::thousands(r.rows), mono.clone()))
+                            .child(stat("Rows", ui::thousands(r.rows)))
                             .child(stat(
                                 "Nulls",
                                 format!("{} · {pct}%", ui::thousands(r.nulls)),
-                                mono.clone(),
                             ))
-                            .child(stat("Distinct", ui::thousands(r.distinct), mono.clone()))
-                            .child(stat("Top", top, mono.clone())),
+                            .child(stat("Distinct", ui::thousands(r.distinct)))
+                            .child(stat("Top", top)),
                     )
                     .child(
                         div()
@@ -140,7 +137,6 @@ impl Render for ColumnStatsView {
                                 .rounded(px(4.))
                                 .cursor_pointer()
                                 .hover(|d| d.bg(c(theme::SELECTION)))
-                                .font_family(mono.clone())
                                 .text_size(px(12.5))
                                 .child(
                                     div()
@@ -189,7 +185,7 @@ impl Render for ColumnStatsView {
         div()
             .id("column-stats")
             .occlude()
-            .font_family(theme::SERIF)
+            .font_family(theme::SANS)
             .whitespace_normal()
             .w(px(372.))
             .p(px(16.))
@@ -208,7 +204,6 @@ impl Render for ColumnStatsView {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .font_family(mono.clone())
                     .child(
                         div()
                             .text_size(px(13.))

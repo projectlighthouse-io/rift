@@ -438,7 +438,6 @@ impl Session {
     }
 
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mono = theme::mono(cx);
         let filter = self.filter.read(cx).value().to_lowercase();
         let selected = self.selected_table(cx);
         let database = self.conn.info().database.clone().unwrap_or_default();
@@ -487,7 +486,6 @@ impl Session {
                     .when(database != schema && !database.is_empty(), |d| {
                         d.child(
                             div()
-                                .font_family(mono.clone())
                                 .text_size(px(12.5))
                                 .child(SharedString::from(database.clone())),
                         )
@@ -495,7 +493,6 @@ impl Session {
                     })
                     .child(
                         div()
-                            .font_family(mono.clone())
                             .text_size(px(12.5))
                             .child(SharedString::from(schema)),
                     )
@@ -650,7 +647,6 @@ impl Session {
                     ))
                     .child(
                         div()
-                            .font_family(mono.clone())
                             .text_size(px(12.5))
                             .child(SharedString::from(object.table.name.to_string())),
                     );
@@ -766,7 +762,6 @@ impl Session {
     }
 
     fn render_schema_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mono = theme::mono(cx);
         gpui::deferred(
             gpui::anchored().snap_to_window().child(
                 div()
@@ -797,7 +792,6 @@ impl Session {
                             .px(px(8.))
                             .rounded(px(4.))
                             .cursor_pointer()
-                            .font_family(mono.clone())
                             .text_size(px(12.5))
                             .when(current, |d| d.bg(c(theme::SELECTION)))
                             .hover(|d| d.bg(c(theme::SELECTION)))
@@ -815,7 +809,6 @@ impl Session {
     }
 
     fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mono = theme::mono(cx);
         div()
             .flex()
             .flex_none()
@@ -828,12 +821,12 @@ impl Session {
             .border_color(c(theme::LINE))
             .children(self.docs.iter().enumerate().map(|(ix, doc)| {
                 let active = self.active == Some(ix);
-                let (icon, label, is_table) = match doc {
-                    Doc::Table(v) => ("table", v.read(cx).table.name.to_string(), true),
-                    Doc::Query(v) => ("code", v.read(cx).title.to_string(), false),
-                    Doc::Key(v) => ("table", v.read(cx).key.to_display(), true),
-                    Doc::Dashboard(v) => ("chart", v.read(cx).dashboard.title.clone(), false),
-                    Doc::Range(v) => ("folder", v.read(cx).dir.path.join("/"), true),
+                let (icon, label) = match doc {
+                    Doc::Table(v) => ("table", v.read(cx).table.name.to_string()),
+                    Doc::Query(v) => ("code", v.read(cx).title.to_string()),
+                    Doc::Key(v) => ("table", v.read(cx).key.to_display()),
+                    Doc::Dashboard(v) => ("chart", v.read(cx).dashboard.title.clone()),
+                    Doc::Range(v) => ("folder", v.read(cx).dir.path.join("/")),
                 };
                 div()
                     .id(("doc-tab", ix))
@@ -865,12 +858,7 @@ impl Session {
                             theme::FAINT
                         },
                     ))
-                    .child(
-                        div()
-                            .text_size(px(12.5))
-                            .when(is_table, |d| d.font_family(mono.clone()))
-                            .child(SharedString::from(label)),
-                    )
+                    .child(div().text_size(px(12.5)).child(SharedString::from(label)))
                     .child(
                         ui::icon_button(("close-doc", ix), "close", 22., 15.).on_click(
                             cx.listener(move |this, _, _, cx| {

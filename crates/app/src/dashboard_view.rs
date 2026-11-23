@@ -335,7 +335,6 @@ impl DashboardView {
     fn render_card(&self, i: usize, cx: &mut Context<Self>) -> impl IntoElement {
         let card = &self.dashboard.cards[i];
         let state = &self.cards[i];
-        let mono = theme::mono(cx);
         let days = RANGES[self.range.read(cx).selected()].1;
         let body = match (&state.error, &state.data) {
             (Some(e), _) => div()
@@ -343,14 +342,11 @@ impl DashboardView {
                 .text_color(c(theme::DELETED_TEXT))
                 .child(SharedString::from(e.clone()))
                 .into_any_element(),
-            (None, Some(data)) => chart::chart_view(
-                ChartModel {
-                    kind: card.chart.kind,
-                    data: chart::within_days(data.clone(), days),
-                    show_points: card.chart.show_points,
-                },
-                mono.clone(),
-            ),
+            (None, Some(data)) => chart::chart_view(ChartModel {
+                kind: card.chart.kind,
+                data: chart::within_days(data.clone(), days),
+                show_points: card.chart.show_points,
+            }),
             (None, None) => div()
                 .text_size(px(12.5))
                 .text_color(c(theme::FAINT))

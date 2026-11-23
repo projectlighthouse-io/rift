@@ -15,7 +15,6 @@ pub(crate) struct Dropdown {
     selected: usize,
     open: bool,
     height: f32,
-    mono: bool,
 }
 
 impl EventEmitter<Changed> for Dropdown {}
@@ -27,19 +26,12 @@ impl Dropdown {
             selected,
             open: false,
             height: 34.,
-            mono: false,
         }
     }
 
     /// Trigger height (34 in forms, 28 in toolbars).
     pub(crate) fn height(mut self, height: f32) -> Self {
         self.height = height;
-        self
-    }
-
-    /// Render values in the mono font (column names).
-    pub(crate) fn mono(mut self) -> Self {
-        self.mono = true;
         self
     }
 
@@ -70,14 +62,6 @@ impl Dropdown {
 impl Render for Dropdown {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _span = tracing::debug_span!("Dropdown::render").entered();
-        let mono = theme::mono(cx);
-        let font = |d: gpui::Div| {
-            if self.mono {
-                d.font_family(mono.clone()).text_size(px(12.5))
-            } else {
-                d
-            }
-        };
         let trigger = div()
             .id("dropdown-trigger")
             .flex()
@@ -94,7 +78,13 @@ impl Render for Dropdown {
             .text_size(px(13.))
             .text_color(c(theme::TEXT))
             .cursor_pointer()
-            .child(font(div().flex_1().overflow_hidden().whitespace_nowrap()).child(self.value()))
+            .child(
+                div()
+                    .flex_1()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .child(self.value()),
+            )
             .child(ui::icon("chevron-down", 14., theme::TEXT))
             .on_click(cx.listener(|this, _, _, cx| {
                 this.open = !this.open;
@@ -122,7 +112,7 @@ impl Render for Dropdown {
                         }))
                         .children(self.options.iter().enumerate().map(|(ix, option)| {
                             let selected = ix == self.selected;
-                            font(div())
+                            div()
                                 .id(("option", ix))
                                 .flex()
                                 .items_center()

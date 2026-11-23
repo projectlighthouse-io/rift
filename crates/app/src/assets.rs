@@ -5,11 +5,14 @@ use std::borrow::Cow;
 use gpui::{AssetSource, SharedString};
 
 /// Bundled font files, registered at startup.
-pub(crate) const FONTS: [&[u8]; 4] = [
-    include_bytes!("../assets/fonts/SourceSerif4-Regular.ttf"),
-    include_bytes!("../assets/fonts/SourceSerif4-It.ttf"),
-    include_bytes!("../assets/fonts/SourceSerif4-Semibold.ttf"),
-    include_bytes!("../assets/fonts/SourceSerif4-Bold.ttf"),
+pub(crate) const FONTS: [&[u8]; 7] = [
+    include_bytes!("../assets/fonts/Inter-Regular.ttf"),
+    include_bytes!("../assets/fonts/Inter-Italic.ttf"),
+    include_bytes!("../assets/fonts/Inter-Medium.ttf"),
+    include_bytes!("../assets/fonts/Inter-SemiBold.ttf"),
+    include_bytes!("../assets/fonts/Inter-Bold.ttf"),
+    include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf"),
+    include_bytes!("../assets/fonts/JetBrainsMono-Medium.ttf"),
 ];
 
 macro_rules! icons {

@@ -489,7 +489,6 @@ impl Workspace {
     }
 
     fn render_top_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mono = theme::mono(cx);
         let showing_start = self.start.is_some();
         let brand = div()
             .flex()
@@ -500,7 +499,6 @@ impl Workspace {
             .child(ui::icon("database", 18., theme::ACCENT_TEXT))
             .child(
                 div()
-                    .font_family(mono.clone())
                     .text_size(px(13.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(c(theme::TEXT))
@@ -611,7 +609,7 @@ impl Workspace {
                     .child(ui::icon("search", 14., theme::FAINT))
                     .on_click(cx.listener(|this, _, window, cx| this.open_palette(window, cx)))
                     .child(div().flex_1().child("Open anything…"))
-                    .child(ui::kbd("⌘K", cx).text_color(c(theme::MUTED))),
+                    .child(ui::kbd("⌘K").text_color(c(theme::MUTED))),
             )
             .when(can_query, |d| {
                 d.child(
@@ -688,7 +686,7 @@ impl Render for Workspace {
             .flex_col()
             .size_full()
             .bg(c(theme::BG))
-            .font_family(theme::SERIF)
+            .font_family(theme::SANS)
             .text_size(px(13.))
             .text_color(c(theme::TEXT))
             .when(!self.sessions.is_empty(), |d| {

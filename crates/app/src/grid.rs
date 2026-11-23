@@ -1,11 +1,12 @@
-//! Virtualized data grid: header with name and type, row numbers, mono cells, `NULL` in faint
+//! Virtualized data grid: header with name and type, row numbers, tabular-figure cells, `NULL` in faint
 //! italics, numbers right-aligned, edit states, and inline editing. Only visible rows are built
 //! (`uniform_list`).
 
 use gpui::prelude::*;
 use gpui::{
-    Context, Entity, EventEmitter, FontWeight, KeyDownEvent, MouseButton, SharedString,
-    Subscription, UniformListScrollHandle, Window, anchored, deferred, div, px, uniform_list,
+    Context, Entity, EventEmitter, FontFeatures, FontWeight, KeyDownEvent, MouseButton,
+    SharedString, Subscription, UniformListScrollHandle, Window, anchored, deferred, div, px,
+    uniform_list,
 };
 use gpui_component::input::{InputEvent, InputState};
 use types::{Column, Row, Value};
@@ -17,7 +18,8 @@ use crate::ui;
 pub(crate) const ROW_HEIGHT: f32 = 31.0;
 const HEADER_HEIGHT: f32 = 33.0;
 const ROW_NUMBER_WIDTH: f32 = 64.0;
-/// Approximate advance of the mono font at 12.5px / 12px / 11px.
+/// Approximate Inter advance at 12.5px / 12px / 11px, rounded up so widths rarely clip.
+// ponytail: char-count estimate; measure with the text system if columns look off.
 const CELL_CHAR: f32 = 7.55;
 const HEADER_CHAR: f32 = 7.25;
 const TYPE_CHAR: f32 = 6.65;
@@ -280,7 +282,7 @@ impl Grid {
         }
     }
 
-    fn render_header(&self, mono: SharedString, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let cell = |w: f32| {
             div()
                 .flex()
@@ -327,7 +329,6 @@ impl Grid {
                                 }),
                             )
                             .gap(px(4.))
-                            .font_family(mono.clone())
                             .children(marker.map(|m| ui::icon(m, 12., theme::FAINT)))
                             .child(
                                 div()
@@ -359,7 +360,7 @@ impl Grid {
             )
     }
 
-    fn render_row(&self, ix: usize, mono: SharedString, cx: &mut Context<Self>) -> gpui::Div {
+    fn render_row(&self, ix: usize, cx: &mut Context<Self>) -> gpui::Div {
         let row = &self.rows[ix];
         let selected = self.selected_row == Some(ix);
         let (row_bg, row_fg, number_fg, label): (u32, u32, u32, SharedString) = match row.mark {
@@ -388,7 +389,8 @@ impl Grid {
             .bg(c(row_bg))
             .border_b_1()
             .border_color(c(theme::LINE))
-            .font_family(mono)
+            // Tabular figures so numbers and dates line up down a column.
+            .font_features(FontFeatures(std::sync::Arc::new(vec![("tnum".into(), 1)])))
             .child(
                 div()
                     .flex()
@@ -514,7 +516,6 @@ fn group_digits(text: &str) -> String {
 impl Render for Grid {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _span = tracing::debug_span!("Grid::render").entered();
-        let mono = theme::mono(cx);
         let count = self.rows.len();
         if let Some(pos) = self.autoscroll.filter(|_| count > 10_000) {
             let next = pos + 97;
@@ -528,7 +529,6 @@ impl Render for Grid {
             }
         }
         let width = self.total_width();
-        let row_mono = mono.clone();
         div()
             .id("grid-h")
             .size_full()
@@ -543,7 +543,7 @@ impl Render for Grid {
                     .flex_col()
                     .w(px(width))
                     .h_full()
-                    .child(self.render_header(mono, cx))
+                    .child(self.render_header(cx))
                     .child(
                         uniform_list(
                             "grid-rows",
@@ -551,9 +551,7 @@ impl Render for Grid {
                             cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                                 let _span =
                                     tracing::debug_span!("Grid::rows", n = range.len()).entered();
-                                range
-                                    .map(|ix| this.render_row(ix, row_mono.clone(), cx))
-                                    .collect()
+                                range.map(|ix| this.render_row(ix, cx)).collect()
                             }),
                         )
                         .flex_1()

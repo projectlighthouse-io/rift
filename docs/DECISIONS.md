@@ -67,9 +67,11 @@ Format: date, decision, reason.
   frame over 16 ms in release (`RIFT_DEV_AUTOSCROLL=1 RIFT_FRAME_LOG=1`, see below).
 - **Icons are the mockups' own SVGs,** extracted from `design/html` into `crates/app/assets/icons`
   and served under `rift/`. Other paths fall back to `gpui-kit-assets`.
-- **Source Serif 4 is bundled as static TTFs** (Regular, Italic, Semibold, Bold, OFL). Adobe ships
-  no static Medium (500), so 500 renders with the nearest weight.
-- **Mono font:** first installed of SF Mono, Menlo, JetBrains Mono, Consolas, DejaVu Sans Mono.
+- **Fonts: Inter and JetBrains Mono, bundled as static TTFs** (OFL; Inter 4.1, JetBrains Mono
+  2.304 release zips). Inter (400/500/600/700 + Italic for `NULL`) is the UI *and* grid data font,
+  with tabular figures (`tnum`) on grid rows only. JetBrains Mono (400/500) is only where code is
+  read or written: the SQL editor and history, the structure status-bar SQL, Show DDL, the Redis
+  string value editor and the FoundationDB value panel. Matches the updated mockups.
 - **Window keeps the native title bar;** the 1440×900 design is the content area below it.
 - **Dev switches:** `RIFT_DEV_QUERY` opens a result tab with that SQL at startup;
   `RIFT_DEV_AUTOSCROLL=1` scrolls every row one step per frame; `RIFT_FRAME_LOG=1` logs slow
@@ -192,7 +194,7 @@ Format: date, decision, reason.
   `LIMIT MAX_CHART_POINTS + 1` to detect truncation. The 4M-row daily aggregation runs in
   ~70 ms on ClickHouse.
 - **Charts are painted directly** with GPUI paths and quads (no chart library). Export PNG
-  renders the same chart as SVG through resvg with the bundled serif font.
+  renders the same chart as SVG through resvg with the bundled UI font.
 - **Pin to dashboard** appends a `ChartCard` to the connection's first dashboard, creating
   "Overview" if none exists (dashboards UI is M10).
 - **Column stats** come from two queries (totals, then top 8 values) on the whole table, shown

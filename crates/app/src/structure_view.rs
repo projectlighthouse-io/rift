@@ -416,7 +416,6 @@ impl StructureView {
     }
 
     fn render_columns(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
-        let mono = theme::mono(cx);
         let Some(desc) = &self.desc else {
             return div().into_any_element();
         };
@@ -441,15 +440,15 @@ impl StructureView {
             };
             let name = col.name.clone();
             let cells = vec![
-                mono_text(col.name.to_string(), theme::TEXT, &mono),
-                mono_text(col.type_name.clone(), theme::ACCENT_TEXT, &mono),
+                cell_text(col.name.to_string(), theme::TEXT),
+                cell_text(col.type_name.clone(), theme::ACCENT_TEXT),
                 if col.nullable {
                     ui::icon("check", 14., theme::NEW_TEXT).into_any_element()
                 } else {
                     dash()
                 },
                 match &col.default {
-                    Some(d) => mono_text(crate::table_view::clean_default(d), theme::MUTED, &mono),
+                    Some(d) => cell_text(crate::table_view::clean_default(d), theme::MUTED),
                     None => dash(),
                 },
                 key,
@@ -476,10 +475,10 @@ impl StructureView {
                         .flex()
                         .items_center()
                         .gap(px(6.))
-                        .child(mono_text(column.name.to_string(), theme::NEW_TEXT, &mono))
+                        .child(cell_text(column.name.to_string(), theme::NEW_TEXT))
                         .child(ui::badge("NEW", theme::NEW_TEXT, theme::NEW_BG))
                         .into_any_element(),
-                    mono_text(column.type_name.clone(), theme::ACCENT_TEXT, &mono),
+                    cell_text(column.type_name.clone(), theme::ACCENT_TEXT),
                     if column.nullable {
                         ui::icon("check", 14., theme::NEW_TEXT).into_any_element()
                     } else {
@@ -488,7 +487,7 @@ impl StructureView {
                     column
                         .default
                         .clone()
-                        .map_or_else(dash, |d| mono_text(d, theme::MUTED, &mono)),
+                        .map_or_else(dash, |d| cell_text(d, theme::MUTED)),
                     dash(),
                     div()
                         .child(SharedString::from(
@@ -515,8 +514,8 @@ impl StructureView {
         if let Some(form) = &self.column_form {
             let nullable = form.nullable;
             let cells = vec![
-                field(&form.name, &mono),
-                field(&form.type_name, &mono),
+                field(&form.name),
+                field(&form.type_name),
                 div()
                     .id("new-col-nullable")
                     .size(px(18.))
@@ -535,9 +534,9 @@ impl StructureView {
                         cx.notify();
                     }))
                     .into_any_element(),
-                field(&form.default, &mono),
+                field(&form.default),
                 dash(),
-                field(&form.comment, &mono),
+                field(&form.comment),
             ];
             let add = ui::secondary_button("submit-col", "Add")
                 .h(px(24.))
@@ -556,7 +555,6 @@ impl StructureView {
     }
 
     fn render_indexes(&self, cx: &mut Context<Self>) -> AnyElement {
-        let mono = theme::mono(cx);
         let Some(desc) = &self.desc else {
             return div().into_any_element();
         };
@@ -569,8 +567,8 @@ impl StructureView {
                 .any(|c| matches!(c, SchemaChange::DropIndex { name } if *name == index.name));
             let name = index.name.clone();
             let cells = vec![
-                mono_text(index.name.to_string(), theme::TEXT, &mono),
-                mono_text(index.columns.join(", "), theme::TEXT, &mono),
+                cell_text(index.name.to_string(), theme::TEXT),
+                cell_text(index.columns.join(", "), theme::TEXT),
                 div()
                     .child(SharedString::from(index.method.clone().unwrap_or_default()))
                     .into_any_element(),
@@ -606,10 +604,10 @@ impl StructureView {
                         .flex()
                         .items_center()
                         .gap(px(6.))
-                        .child(mono_text(index.name.to_string(), theme::NEW_TEXT, &mono))
+                        .child(cell_text(index.name.to_string(), theme::NEW_TEXT))
                         .child(ui::badge("NEW", theme::NEW_TEXT, theme::NEW_BG))
                         .into_any_element(),
-                    mono_text(index.columns.join(", "), theme::TEXT, &mono),
+                    cell_text(index.columns.join(", "), theme::TEXT),
                     div().child("btree").into_any_element(),
                     if index.unique {
                         ui::icon("check", 14., theme::NEW_TEXT).into_any_element()
@@ -637,8 +635,8 @@ impl StructureView {
         if let Some(form) = &self.index_form {
             let unique = form.unique;
             let cells = vec![
-                field(&form.name, &mono),
-                field(&form.columns, &mono),
+                field(&form.name),
+                field(&form.columns),
                 div().child("btree").into_any_element(),
                 div()
                     .id("new-idx-unique")
@@ -675,8 +673,7 @@ impl StructureView {
         bordered_table(&headers, &INDEX_WIDTHS, rows)
     }
 
-    fn render_foreign_keys(&self, cx: &mut Context<Self>) -> AnyElement {
-        let mono = theme::mono(cx);
+    fn render_foreign_keys(&self) -> AnyElement {
         let Some(desc) = &self.desc else {
             return div().into_any_element();
         };
@@ -702,9 +699,9 @@ impl StructureView {
                         .join(", ")
                 );
                 let cells = vec![
-                    mono_text(fk.name.clone(), theme::TEXT, &mono),
-                    mono_text(column, theme::TEXT, &mono),
-                    mono_text(target, theme::TEXT, &mono),
+                    cell_text(fk.name.clone(), theme::TEXT),
+                    cell_text(column, theme::TEXT),
+                    cell_text(target, theme::TEXT),
                     div()
                         .child(SharedString::from(fk.on_delete.clone()))
                         .into_any_element(),
@@ -722,7 +719,6 @@ impl StructureView {
         if self.pending.is_empty() && self.error.is_none() {
             return None;
         }
-        let mono = theme::mono(cx);
         let (text, color) = match (&self.error, self.preview()) {
             (Some(e), _) => (e.clone(), theme::DELETED_TEXT),
             (None, Ok(sql)) => (format!("{};", sql.join("; ")), theme::MUTED),
@@ -747,7 +743,7 @@ impl StructureView {
                         .overflow_hidden()
                         .whitespace_nowrap()
                         .text_ellipsis()
-                        .font_family(mono)
+                        .font_family(theme::mono(cx))
                         .text_size(px(12.5))
                         .text_color(c(color))
                         .child(SharedString::from(text)),
@@ -783,7 +779,7 @@ impl StructureView {
                     )
                     .child(
                         ui::primary_button("apply-schema", "Apply")
-                            .child(ui::kbd("⌘S", cx).opacity(0.85))
+                            .child(ui::kbd("⌘S").opacity(0.85))
                             .on_click(cx.listener(|this, _, _, cx| this.apply(cx))),
                     )
                 }),
@@ -815,9 +811,8 @@ fn dash() -> AnyElement {
         .into_any_element()
 }
 
-fn mono_text(text: String, color: u32, mono: &SharedString) -> AnyElement {
+fn cell_text(text: String, color: u32) -> AnyElement {
     div()
-        .font_family(mono.clone())
         .text_color(c(color))
         .overflow_hidden()
         .text_ellipsis()
@@ -836,7 +831,7 @@ fn key_badge(icon: &str, label: &'static str, color: u32) -> AnyElement {
         .into_any_element()
 }
 
-fn field(input: &Entity<InputState>, mono: &SharedString) -> AnyElement {
+fn field(input: &Entity<InputState>) -> AnyElement {
     div()
         .w_full()
         .h(px(24.))
@@ -844,7 +839,6 @@ fn field(input: &Entity<InputState>, mono: &SharedString) -> AnyElement {
         .bg(c(theme::BG))
         .border_1()
         .border_color(c(theme::LINE))
-        .font_family(mono.clone())
         .child(ui::input(input, 12.5))
         .into_any_element()
 }
@@ -935,7 +929,6 @@ fn bordered_table(headers: &[&str], widths: &[f32], rows: Vec<AnyElement>) -> An
 impl Render for StructureView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _span = tracing::debug_span!("StructureView::render").entered();
-        let mono = theme::mono(cx);
         let editable = self.editable();
         let add_column = editable.then(|| {
             (
@@ -966,7 +959,7 @@ impl Render for StructureView {
                 .bg(c(theme::BG))
                 .border_1()
                 .border_color(c(theme::LINE))
-                .font_family(mono.clone())
+                .font_family(theme::mono(cx))
                 .text_size(px(12.5))
                 .children(
                     ddl.lines()
@@ -983,7 +976,7 @@ impl Render for StructureView {
         });
         let columns = self.render_columns(window, cx);
         let indexes = self.render_indexes(cx);
-        let fks = self.render_foreign_keys(cx);
+        let fks = self.render_foreign_keys();
         div()
             .flex()
             .flex_col()

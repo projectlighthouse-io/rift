@@ -225,7 +225,7 @@ impl ImportPanel {
                     .position(|h| h.eq_ignore_ascii_case(col.name.as_str()))
                     .map_or(0, |i| i + 1);
                 let options = options.clone();
-                cx.new(|_| Dropdown::new(options, pick).height(28.).mono())
+                cx.new(|_| Dropdown::new(options, pick).height(28.))
             })
             .collect();
         for d in &mapping {
@@ -331,7 +331,6 @@ impl ImportPanel {
 impl Render for ImportPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _span = tracing::debug_span!("ImportPanel::render").entered();
-        let mono = theme::mono(cx);
         let rows = self.rows.len() as u64;
         div()
             .id("import-panel")
@@ -392,7 +391,6 @@ impl Render for ImportPanel {
                             .child(
                                 div()
                                     .w(px(200.))
-                                    .font_family(mono.clone())
                                     .text_size(px(12.5))
                                     .child(SharedString::from(format!(
                                         "{}  {}",

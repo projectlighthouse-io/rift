@@ -203,7 +203,6 @@ impl DirectoryTree {
 impl Render for DirectoryTree {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _span = tracing::debug_span!("DirectoryTree::render").entered();
-        let mono = theme::mono(cx);
         let filter = self.filter.read(cx).value().to_lowercase();
         let rows: Vec<_> = self
             .dirs
@@ -271,12 +270,7 @@ impl Render for DirectoryTree {
                             theme::FAINT
                         },
                     ))
-                    .child(
-                        div()
-                            .font_family(mono.clone())
-                            .text_size(px(12.5))
-                            .child(SharedString::from(label)),
-                    )
+                    .child(div().text_size(px(12.5)).child(SharedString::from(label)))
                     // Parents usually hold no keys of their own; a 0 there is noise.
                     .children(
                         self.counts
@@ -338,12 +332,7 @@ impl Render for DirectoryTree {
                             .border_1()
                             .border_color(c(theme::LINE))
                             .child(ui::icon("database", 14., theme::ACCENT_TEXT))
-                            .child(
-                                div()
-                                    .font_family(mono.clone())
-                                    .text_size(px(12.5))
-                                    .child(self.name.clone()),
-                            )
+                            .child(div().text_size(px(12.5)).child(self.name.clone()))
                             .child(
                                 div()
                                     .id("reload-dirs")
@@ -803,7 +792,6 @@ impl RangeView {
                             .bg(c(theme::BG))
                             .border_1()
                             .border_color(c(theme::LINE))
-                            .font_family(mono.clone())
                             .child(ui::input(&key, 12.5)),
                     )
                     .child(boxed(
@@ -876,7 +864,6 @@ impl RangeView {
                         .child(label("VALUE"))
                         .child(
                             div()
-                                .font_family(mono.clone())
                                 .text_size(px(12.5))
                                 .child(SharedString::from(self.key_text(&key, cx))),
                         )
@@ -988,7 +975,6 @@ impl RangeView {
     }
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mono = theme::mono(cx);
         let field = |label: &'static str, w: f32, input: &Entity<InputState>| {
             div()
                 .flex()
@@ -1011,7 +997,6 @@ impl RangeView {
                         .bg(c(theme::BG))
                         .border_1()
                         .border_color(c(theme::LINE))
-                        .font_family(mono.clone())
                         .child(ui::input(input, 12.5)),
                 )
         };

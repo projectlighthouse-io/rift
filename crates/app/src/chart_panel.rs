@@ -97,12 +97,12 @@ impl ChartPanel {
             .skip(1)
             .find(|(_, c)| is_number(c))
             .map_or(0, |(i, _)| i);
-        let x = cx.new(|_| Dropdown::new(labels, 0).mono());
-        let y = cx.new(|_| Dropdown::new(names.clone(), y_ix).mono());
+        let x = cx.new(|_| Dropdown::new(labels, 0));
+        let y = cx.new(|_| Dropdown::new(names.clone(), y_ix));
         let agg = cx.new(|_| Dropdown::new(AGGS.iter().map(|a| a.0.into()).collect(), 0));
         let mut split_names: Vec<SharedString> = vec!["—".into()];
         split_names.extend(names);
-        let split = cx.new(|_| Dropdown::new(split_names, 0).mono());
+        let split = cx.new(|_| Dropdown::new(split_names, 0));
         let subscriptions = [&x, &y, &agg, &split]
             .into_iter()
             .map(|d| cx.subscribe_in(d, window, |this, _, _: &Changed, _, cx| this.refresh(cx)))

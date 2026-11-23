@@ -54,7 +54,7 @@ impl Render for AboutView {
             .justify_center()
             .gap(px(10.))
             .bg(c(theme::BG))
-            .font_family(theme::SERIF)
+            .font_family(theme::SANS)
             .text_color(c(theme::TEXT))
             .child(img(image).size(px(96.)))
             .child(

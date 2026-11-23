@@ -740,7 +740,7 @@ impl TableView {
             .as_ref()
             .map(|f| f.value.to_string())
             .unwrap_or_default();
-        let column = cx.new(|_| Dropdown::new(names, column_ix).height(28.).mono());
+        let column = cx.new(|_| Dropdown::new(names, column_ix).height(28.));
         let op =
             cx.new(|_| Dropdown::new(OPS.iter().map(|o| o.0.into()).collect(), op_ix).height(28.));
         let value = cx.new(|cx| {
@@ -809,7 +809,6 @@ impl TableView {
     }
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mono = theme::mono(cx);
         let filters = div()
             .flex()
             .flex_wrap()
@@ -833,7 +832,6 @@ impl TableView {
                             .bg(c(theme::BG))
                             .border_1()
                             .border_color(c(theme::LINE))
-                            .font_family(mono.clone())
                             .child(ui::input(&f.value, 12.5)),
                     )
                     .when(i > 0, |d| {
@@ -955,7 +953,6 @@ impl TableView {
     }
 
     fn render_columns_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mono = theme::mono(cx);
         deferred(
             anchored().snap_to_window().child(
                 div()
@@ -994,7 +991,6 @@ impl TableView {
                             )
                             .child(
                                 div()
-                                    .font_family(mono.clone())
                                     .text_size(px(12.5))
                                     .child(SharedString::from(col.name.to_string())),
                             )
@@ -1018,7 +1014,6 @@ impl TableView {
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement> {
         let inspector = self.inspector.as_ref()?;
-        let mono = theme::mono(cx);
         let row = inspector.row;
         let title = if row >= self.rows.len() {
             "NEW ROW".to_owned()
@@ -1043,7 +1038,6 @@ impl TableView {
                         div()
                             .flex()
                             .gap(px(4.))
-                            .font_family(mono.clone())
                             .text_size(px(11.5))
                             .text_color(c(theme::MUTED))
                             .child(SharedString::from(col.name.to_string()))
@@ -1060,7 +1054,6 @@ impl TableView {
                             .bg(c(theme::BG))
                             .border_1()
                             .border_color(c(if focused { theme::ACCENT } else { theme::LINE }))
-                            .font_family(mono.clone())
                             .child(ui::input(input, 12.5)),
                     ),
             );
@@ -1085,16 +1078,9 @@ impl TableView {
                     .flex()
                     .flex_col()
                     .gap(px(4.))
-                    .child(
-                        div()
-                            .font_family(mono.clone())
-                            .text_size(px(11.5))
-                            .text_color(c(theme::MUTED))
-                            .child(SharedString::from(format!(
-                                "{noun} → {}",
-                                target.table.name
-                            ))),
-                    )
+                    .child(div().text_size(px(11.5)).text_color(c(theme::MUTED)).child(
+                        SharedString::from(format!("{noun} → {}", target.table.name)),
+                    ))
                     .child(
                         div()
                             .id(("fk-link", i))
@@ -1241,7 +1227,7 @@ impl TableView {
                 )
                 .child(
                     ui::primary_button("save", "Save changes")
-                        .child(ui::kbd("⌘S", cx).opacity(0.85))
+                        .child(ui::kbd("⌘S").opacity(0.85))
                         .on_click(cx.listener(|this, _, _, cx| this.save(cx))),
                 )
         });

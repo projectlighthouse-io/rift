@@ -647,7 +647,7 @@ impl SqlEditor {
             .border_color(c(theme::LINE))
             .child(
                 ui::primary_icon_button("run-current", "play", "Run current")
-                    .child(ui::kbd("⌘↵", cx).opacity(0.85))
+                    .child(ui::kbd("⌘↵").opacity(0.85))
                     .on_click(cx.listener(|this, _, _, cx| this.run_current(cx))),
             )
             .child(
@@ -921,29 +921,25 @@ impl SqlEditor {
         let body = match (self.results.get(self.active_tab), chart) {
             (_, Some(chart)) => chart.into_any_element(),
             (Some(r), _) => r.grid.clone().into_any_element(),
-            (None, None) => {
-                let mono = theme::mono(cx);
-                div()
-                    .id("messages")
-                    .size_full()
-                    .overflow_y_scroll()
-                    .p(px(12.))
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.))
-                    .font_family(mono)
-                    .text_size(px(12.5))
-                    .children(self.messages.iter().map(|m| {
-                        div()
-                            .text_color(c(if m.error {
-                                theme::DELETED_TEXT
-                            } else {
-                                theme::TEXT
-                            }))
-                            .child(SharedString::from(m.text.clone()))
-                    }))
-                    .into_any_element()
-            }
+            (None, None) => div()
+                .id("messages")
+                .size_full()
+                .overflow_y_scroll()
+                .p(px(12.))
+                .flex()
+                .flex_col()
+                .gap(px(4.))
+                .text_size(px(12.5))
+                .children(self.messages.iter().map(|m| {
+                    div()
+                        .text_color(c(if m.error {
+                            theme::DELETED_TEXT
+                        } else {
+                            theme::TEXT
+                        }))
+                        .child(SharedString::from(m.text.clone()))
+                }))
+                .into_any_element(),
         };
         div()
             .flex()

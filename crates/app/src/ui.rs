@@ -137,11 +137,8 @@ pub(crate) fn icon_button(
 }
 
 /// Keyboard hint such as `⌘K`.
-pub(crate) fn kbd(text: impl Into<SharedString>, cx: &App) -> Div {
-    div()
-        .font_family(theme::mono(cx))
-        .text_size(px(11.))
-        .child(text.into())
+pub(crate) fn kbd(text: impl Into<SharedString>) -> Div {
+    div().text_size(px(11.)).child(text.into())
 }
 
 /// Faint 2px dots every 22px, painted behind content. Place as the first, absolutely

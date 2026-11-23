@@ -195,13 +195,7 @@ impl KeyTree {
         cx.notify();
     }
 
-    fn key_row(
-        &self,
-        entry: &KeyEntry,
-        indent: f32,
-        mono: &SharedString,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn key_row(&self, entry: &KeyEntry, indent: f32, cx: &mut Context<Self>) -> AnyElement {
         let selected = self.selected.as_ref() == Some(&entry.key);
         let key = entry.key.clone();
         div()
@@ -227,7 +221,6 @@ impl KeyTree {
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .text_ellipsis()
-                    .font_family(mono.clone())
                     .text_size(px(12.5))
                     .child(SharedString::from(entry.key.to_display())),
             )
@@ -256,7 +249,6 @@ fn natural(a: &str, b: &str) -> std::cmp::Ordering {
 impl Render for KeyTree {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _span = tracing::debug_span!("KeyTree::render").entered();
-        let mono = theme::mono(cx);
         let database = self
             .conn
             .info()
@@ -291,7 +283,6 @@ impl Render for KeyTree {
                     .child(ui::icon("database", 14., theme::ACCENT_TEXT))
                     .child(
                         div()
-                            .font_family(mono.clone())
                             .text_size(px(12.5))
                             .child(SharedString::from(database)),
                     ),
@@ -307,7 +298,6 @@ impl Render for KeyTree {
                     .bg(c(theme::BG))
                     .border_1()
                     .border_color(c(theme::LINE))
-                    .font_family(mono.clone())
                     .child(ui::icon("search", 13., theme::FAINT))
                     .child(div().flex_1().child(ui::input(&self.pattern, 12.5))),
             );
@@ -325,7 +315,7 @@ impl Render for KeyTree {
         for (group, keys) in &self.groups {
             if group.is_empty() {
                 for entry in keys.iter().take(*self.shown.get("").unwrap_or(&SHOWN_STEP)) {
-                    nav = nav.child(self.key_row(entry, 8., &mono, cx));
+                    nav = nav.child(self.key_row(entry, 8., cx));
                 }
                 continue;
             }
@@ -355,7 +345,6 @@ impl Render for KeyTree {
                     .child(ui::icon("folder", 14., theme::MUTED))
                     .child(
                         div()
-                            .font_family(mono.clone())
                             .text_size(px(12.5))
                             .child(SharedString::from(group.clone())),
                     )
@@ -376,7 +365,7 @@ impl Render for KeyTree {
             if open {
                 let shown = *self.shown.get(group).unwrap_or(&FIRST_SHOWN);
                 for entry in keys.iter().take(shown) {
-                    nav = nav.child(self.key_row(entry, 24., &mono, cx));
+                    nav = nav.child(self.key_row(entry, 24., cx));
                 }
                 if keys.len() > shown {
                     let name = group.clone();
@@ -388,7 +377,6 @@ impl Render for KeyTree {
                             .h(px(28.))
                             .pl(px(24.))
                             .cursor_pointer()
-                            .font_family(mono.clone())
                             .text_size(px(12.5))
                             .text_color(c(theme::MUTED))
                             .child(SharedString::from(format!(
@@ -877,7 +865,6 @@ impl KeyView {
     }
 
     fn render_header(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mono = theme::mono(cx);
         let kind = self.value.as_ref().map(KvValue::kind);
         let (count, bytes) = self.value.as_ref().map(size).unwrap_or_default();
         let unit = match kind {
@@ -896,7 +883,6 @@ impl KeyView {
                 .bg(c(theme::BG))
                 .border_1()
                 .border_color(c(theme::ACCENT))
-                .font_family(mono.clone())
                 .child(ui::input(input, 12.5))
         };
         let _ = window;
@@ -911,7 +897,6 @@ impl KeyView {
             .border_color(c(theme::LINE))
             .child(
                 div()
-                    .font_family(mono.clone())
                     .text_size(px(15.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(SharedString::from(self.key.to_display())),
@@ -1013,7 +998,6 @@ impl KeyView {
     }
 
     fn render_body(&self, cx: &mut Context<Self>) -> AnyElement {
-        let mono = theme::mono(cx);
         let Some(value) = &self.value else {
             return div()
                 .p(px(16.))
@@ -1036,7 +1020,7 @@ impl KeyView {
                         .bg(c(theme::BG))
                         .border_1()
                         .border_color(c(theme::LINE))
-                        .font_family(mono)
+                        .font_family(theme::mono(cx))
                         .child(
                             gpui_component::input::Editor::new(input)
                                 .appearance(false)
@@ -1106,7 +1090,6 @@ impl KeyView {
                     .bg(c(theme::BG))
                     .border_b_1()
                     .border_color(c(theme::LINE))
-                    .font_family(mono.clone())
                     .text_size(px(12.5))
                     .children(cells.into_iter().enumerate().map(|(i, text)| {
                         if i == editable_col
@@ -1171,7 +1154,6 @@ impl KeyView {
                     .bg(c(theme::NEW_BG))
                     .border_b_1()
                     .border_color(c(theme::LINE))
-                    .font_family(mono.clone())
                     .child(cell(0).child(field(first)))
                     .when(two, |d| d.child(cell(1).child(field(second))))
                     .when(!two && heads.len() == 2, |d| d.child(cell(1)))
@@ -1320,19 +1302,12 @@ impl MemoryPanel {
     }
 }
 
-fn bar_row(
-    label: String,
-    fraction: f32,
-    value: String,
-    color: u32,
-    mono: &SharedString,
-) -> AnyElement {
+fn bar_row(label: String, fraction: f32, value: String, color: u32) -> AnyElement {
     div()
         .flex()
         .items_center()
         .gap(px(10.))
         .h(px(22.))
-        .font_family(mono.clone())
         .text_size(px(12.))
         .child(
             div()
@@ -1370,9 +1345,8 @@ fn bar_row(
 }
 
 impl Render for MemoryPanel {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let _span = tracing::debug_span!("MemoryPanel::render").entered();
-        let mono = theme::mono(cx);
         let title = |t: &'static str| {
             div()
                 .text_size(px(13.))
@@ -1415,7 +1389,6 @@ impl Render for MemoryPanel {
                                     p.bytes as f32 / max,
                                     ui::bytes(p.bytes),
                                     0xa597d8,
-                                    &mono,
                                 )
                             })),
                     )
@@ -1427,7 +1400,6 @@ impl Render for MemoryPanel {
                             k.keys as f32 / kmax,
                             ui::thousands(k.keys),
                             theme::ACCENT,
-                            &mono,
                         )
                     })));
             }

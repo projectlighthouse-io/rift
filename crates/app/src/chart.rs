@@ -171,7 +171,7 @@ fn paint_text(
 ) {
     let run = TextRun {
         len: text.len(),
-        font: font(theme::SERIF),
+        font: font(theme::SANS),
         color: theme::hsla(theme::FAINT),
         background_color: None,
         underline: None,
@@ -329,10 +329,10 @@ pub(crate) fn chart_element(model: ChartModel) -> impl IntoElement {
 }
 
 /// Any card or result chart: canvas for plotted kinds, plain elements for the number and bar list.
-pub(crate) fn chart_view(model: ChartModel, mono: SharedString) -> gpui::AnyElement {
+pub(crate) fn chart_view(model: ChartModel) -> gpui::AnyElement {
     match model.kind {
         ChartKind::Number => number_element(model).into_any_element(),
-        ChartKind::BarList => bar_list_element(&model.data, mono).into_any_element(),
+        ChartKind::BarList => bar_list_element(&model.data).into_any_element(),
         _ => chart_element(model).into_any_element(),
     }
 }
@@ -392,7 +392,7 @@ fn number_element(model: ChartModel) -> impl IntoElement {
         .child(gpui::div().flex_1().min_h_0().child(chart_element(model)))
 }
 
-fn bar_list_element(data: &ChartData, mono: SharedString) -> impl IntoElement {
+fn bar_list_element(data: &ChartData) -> impl IntoElement {
     let mut points: Vec<_> = data
         .series
         .first()
@@ -404,7 +404,6 @@ fn bar_list_element(data: &ChartData, mono: SharedString) -> impl IntoElement {
         .flex()
         .flex_col()
         .gap(px(4.))
-        .font_family(mono)
         .text_size(px(12.5))
         .children(points.into_iter().map(move |p| {
             gpui::div()
@@ -480,7 +479,7 @@ pub(crate) fn svg(model: &ChartModel, title: &str, width: f32, height: f32) -> S
     let px_x = |f: f64| x0 + (f as f32) * w;
     let px_y = |y: f64| top + h - (y / l.y_max) as f32 * h;
     let mut out = format!(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='{width}' height='{height}' font-family='Source Serif 4'>\
+        "<svg xmlns='http://www.w3.org/2000/svg' width='{width}' height='{height}' font-family='Inter'>\
          <rect width='100%' height='100%' fill='#ffffff'/>\
          <text x='12' y='24' font-size='15' font-weight='600' fill='{}'>{}</text>",
         hex(theme::TEXT),
@@ -563,7 +562,7 @@ pub(crate) fn svg(model: &ChartModel, title: &str, width: f32, height: f32) -> S
     out
 }
 
-/// Renders [`svg`] to PNG bytes with the bundled serif font.
+/// Renders [`svg`] to PNG bytes with the bundled UI font.
 pub(crate) fn png(model: &ChartModel, title: &str) -> Result<Vec<u8>, String> {
     let (width, height) = (1200.0, 600.0);
     let svg = svg(model, title, width, height);

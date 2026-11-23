@@ -225,7 +225,6 @@ impl Palette {
 impl Render for Palette {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _span = tracing::debug_span!("Palette::render").entered();
-        let mono = theme::mono(cx);
         let hint = |key: &'static str, text: &'static str| {
             div()
                 .flex()
@@ -279,9 +278,7 @@ impl Render for Palette {
                             .overflow_hidden()
                             .whitespace_nowrap()
                             .text_size(px(13.5))
-                            .when(item.mono, |d| {
-                                d.font_family(mono.clone()).text_size(px(13.))
-                            })
+                            .when(item.mono, |d| d.text_size(px(13.)))
                             .child(label),
                     )
                     .child(
@@ -330,7 +327,6 @@ impl Render for Palette {
                             .border_color(c(theme::LINE))
                             .text_size(px(11.))
                             .text_color(c(theme::MUTED))
-                            .font_family(mono.clone())
                             .child("esc"),
                     ),
             )
