@@ -1,5 +1,5 @@
-//! The window root: top bar with open connections, then the active session or the start
-//! screen (connections list / connection dialog).
+//! The window root: breadcrumb top bar (connection switcher, database, schema), then the active
+//! session or the start screen (connections list / connection dialog).
 
 use std::time::Instant;
 
@@ -9,7 +9,7 @@ use gpui::{
 };
 use types::{ObjectKind, SafeMode, SavedConnection, Tag};
 
-use crate::actions::OpenPalette;
+use crate::actions::{OpenPalette, ToggleSwitcher};
 use crate::connection_dialog::{ConnectionDialog, DialogEvent};
 use crate::connections::{ConnectionsEvent, ConnectionsScreen};
 use crate::palette::{self, Item, Palette, PaletteEvent, Target};
@@ -42,6 +42,12 @@ pub(crate) struct Workspace {
     _job: Option<gpui::Task<()>>,
     /// Root focus, so ⌘K works before anything else has focus.
     focus: gpui::FocusHandle,
+    /// Connection switcher dropdown is open.
+    switcher: bool,
+    /// Switcher row whose right-click menu (Disconnect) is showing.
+    switcher_menu: Option<usize>,
+    /// Schema crumb dropdown is open.
+    schema_menu: bool,
 }
 
 impl Workspace {
@@ -55,6 +61,9 @@ impl Workspace {
             notice: None,
             _job: None,
             focus: cx.focus_handle(),
+            switcher: false,
+            switcher_menu: None,
+            schema_menu: false,
         };
         window.focus(&workspace.focus, cx);
         workspace.show_list(window, cx);
@@ -488,119 +497,147 @@ impl Workspace {
         }
     }
 
+    fn activate(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if self.start.is_some() {
+            window.focus(&self.focus, cx);
+        }
+        self.active = Some(ix);
+        self.start = None;
+        self._start_subscription = None;
+        self.switcher = false;
+        self.switcher_menu = None;
+        cx.notify();
+    }
+
     fn render_top_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let showing_start = self.start.is_some();
         let brand = div()
             .flex()
+            .flex_none()
             .items_center()
             .gap(px(8.))
-            .h(px(36.))
-            .pr(px(12.))
-            .child(ui::icon("database", 18., theme::ACCENT_TEXT))
+            .h(px(30.))
+            .pr(px(6.))
             .child(
                 div()
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(c(theme::TEXT))
-                    .child("rift"),
-            );
-        let tabs = div()
-            .flex()
-            .items_end()
-            .gap(px(2.))
-            .flex_1()
-            .min_w_0()
-            .children(self.sessions.iter().enumerate().map(|(ix, session)| {
-                let s = session.read(cx);
-                let active = !showing_start && self.active == Some(ix);
-                div()
-                    .id(("conn-tab", ix))
                     .flex()
                     .items_center()
-                    .gap(px(8.))
-                    .h(px(37.))
-                    .pl(px(12.))
-                    .pr(px(8.))
-                    .mb(px(-1.))
-                    .rounded_tl(px(8.))
-                    .rounded_tr(px(8.))
-                    .border_t_1()
-                    .border_l_1()
-                    .border_r_1()
-                    .cursor_pointer()
-                    .map(|d| {
-                        if active {
-                            d.bg(c(theme::BG)).border_color(c(theme::LINE))
-                        } else {
-                            d.border_color(gpui::transparent_black())
-                        }
-                    })
-                    .text_color(c(if active { theme::TEXT } else { theme::MUTED }))
-                    .child(ui::tag_square(s.tag, 8.))
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(s.name.clone()),
-                    )
+                    .justify_center()
+                    .size(px(26.))
+                    .rounded(px(8.))
+                    .bg(c(theme::PRIMARY))
+                    .child(ui::icon("database", 15., theme::BG)),
+            )
+            .child(
+                div()
+                    .text_size(px(14.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("rift"),
+            );
+        let session = self
+            .start
+            .is_none()
+            .then(|| self.active.and_then(|ix| self.sessions.get(ix)))
+            .flatten()
+            .map(|s| {
+                let s = s.read(cx);
+                Crumbs {
+                    name: s.name.clone(),
+                    engine: s.engine(),
+                    read_only: s.safe_mode == SafeMode::ReadOnly,
+                    database: s.database(),
+                    schema: s.schema().map(|s| s.to_string()).unwrap_or_default(),
+                    pickable: s.schemas().len() > 1,
+                    can_query: s.conn.query().is_some(),
+                }
+            });
+        let can_query = session.as_ref().is_some_and(|s| s.can_query);
+        let mut crumbs = div()
+            .flex()
+            .items_center()
+            .gap(px(2.))
+            .min_w_0()
+            .child(brand);
+        if let Some(s) = session {
+            let others = self.sessions.len() - 1;
+            crumbs = crumbs.child(separator()).child(
+                crumb("crumb-connection")
+                    .relative()
+                    .child(ui::engine_tile(&s.engine, 22.))
+                    .child(s.name)
                     .child(
                         div()
                             .text_size(px(12.))
+                            .font_weight(FontWeight::NORMAL)
                             .text_color(c(theme::FAINT))
-                            .child(s.engine()),
+                            .child(s.engine),
                     )
-                    .when(s.safe_mode == SafeMode::ReadOnly, |d| {
+                    .when(s.read_only, |d| {
                         d.child(ui::badge(
                             "READ-ONLY",
                             theme::DELETED_TEXT,
                             theme::DELETED_BG,
                         ))
                     })
-                    .child(
-                        ui::icon_button(("close-conn", ix), "close", 22., 15.).on_click(
-                            cx.listener(move |this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.close_session(ix, window, cx);
-                            }),
-                        ),
-                    )
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        if this.start.is_some() {
-                            window.focus(&this.focus, cx);
-                        }
-                        this.active = Some(ix);
-                        this.start = None;
-                        this._start_subscription = None;
+                    .when(others > 0, |d| {
+                        d.child(
+                            div()
+                                .px(px(6.))
+                                .rounded(px(6.))
+                                .bg(c(theme::RAISED))
+                                .text_size(px(11.))
+                                .text_color(c(theme::MUTED))
+                                .child(SharedString::from(format!("+{others}"))),
+                        )
+                    })
+                    .child(ui::icon("chevron-down", 12., theme::FAINT))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.switcher = !this.switcher;
+                        this.switcher_menu = None;
                         cx.notify();
                     }))
-            }))
-            .child(
-                div().mb(px(3.)).child(
-                    ui::icon_button("open-conn", "plus", 30., 15.)
-                        .on_click(cx.listener(|this, _, window, cx| this.show_list(window, cx))),
-                ),
+                    .children(self.switcher.then(|| self.render_switcher(cx))),
             );
-        let can_query = self
-            .active
-            .and_then(|ix| self.sessions.get(ix))
-            .is_some_and(|s| s.read(cx).conn.query().is_some());
+            let (database, schema) = (s.database, s.schema);
+            // Engines without a schema level (MySQL) report the database as the schema.
+            if !database.is_empty() && database != schema {
+                crumbs = crumbs
+                    .child(separator())
+                    .child(crumb("crumb-database").child(SharedString::from(database)));
+            }
+            if !schema.is_empty() {
+                let pickable = s.pickable;
+                crumbs = crumbs.child(separator()).child(
+                    crumb("crumb-schema")
+                        .relative()
+                        .child(SharedString::from(schema))
+                        .when(pickable, |d| {
+                            d.child(ui::icon("chevron-down", 12., theme::FAINT))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.schema_menu = !this.schema_menu;
+                                    cx.notify();
+                                }))
+                        })
+                        .children(self.schema_menu.then(|| self.render_schema_menu(cx))),
+                );
+            }
+        }
         let right = div()
             .flex()
+            .flex_none()
             .items_center()
-            .gap(px(6.))
-            .h(px(36.))
-            .mb(px(4.))
+            .gap(px(8.))
+            .ml_auto()
             .child(
                 div()
                     .id("open-anything")
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .h(px(30.))
-                    .w(px(220.))
+                    .h(px(32.))
+                    .w(px(240.))
                     .px(px(10.))
-                    .rounded(px(6.))
-                    .bg(c(theme::RAISED))
+                    .rounded(px(10.))
+                    .bg(c(theme::BG))
                     .border_1()
                     .border_color(c(theme::LINE))
                     .text_size(px(13.))
@@ -608,8 +645,14 @@ impl Workspace {
                     .cursor_pointer()
                     .child(ui::icon("search", 14., theme::FAINT))
                     .on_click(cx.listener(|this, _, window, cx| this.open_palette(window, cx)))
-                    .child(div().flex_1().child("Open anything…"))
-                    .child(ui::kbd("⌘K").text_color(c(theme::MUTED))),
+                    .child(div().flex_1().child("Search or jump to…"))
+                    .child(
+                        ui::kbd("⌘K")
+                            .px(px(6.))
+                            .rounded(px(6.))
+                            .bg(c(theme::RAISED))
+                            .text_color(c(theme::MUTED)),
+                    ),
             )
             .when(can_query, |d| {
                 d.child(
@@ -629,17 +672,266 @@ impl Workspace {
         div()
             .flex()
             .flex_none()
-            .items_end()
+            .items_center()
             .gap(px(4.))
-            .pt(px(6.))
-            .px(px(12.))
-            .bg(c(theme::BG))
-            .border_b_1()
-            .border_color(c(theme::LINE))
-            .child(brand)
-            .child(tabs)
+            .py(px(12.))
+            .px(px(18.))
+            .child(crumbs)
             .child(right)
     }
+
+    /// The connection switcher dropdown: open connections, then connect / new.
+    fn render_switcher(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let rows = self.sessions.iter().enumerate().map(|(ix, session)| {
+            let s = session.read(cx);
+            let current = self.start.is_none() && self.active == Some(ix);
+            let menu = self.switcher_menu == Some(ix);
+            div()
+                .id(("switch-conn", ix))
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .h(px(56.))
+                .flex_none()
+                .px(px(10.))
+                .rounded(px(10.))
+                .cursor_pointer()
+                .when(current, |d| d.bg(c(theme::RAISED)))
+                .hover(|d| d.bg(c(theme::RAISED)))
+                .child(ui::engine_tile(&s.engine(), 36.))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_w_0()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .text_size(px(13.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(s.name.clone())
+                                .when(s.safe_mode == SafeMode::ReadOnly, |d| {
+                                    d.child(ui::badge(
+                                        "READ-ONLY",
+                                        theme::DELETED_TEXT,
+                                        theme::DELETED_BG,
+                                    ))
+                                }),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(c(theme::FAINT))
+                                .whitespace_nowrap()
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .child(SharedString::from(format!(
+                                    "{} · {}",
+                                    s.engine(),
+                                    s.conn.info().address
+                                ))),
+                        ),
+                )
+                .map(|d| {
+                    if menu {
+                        d.child(
+                            ui::ghost_button(("disconnect", ix), "Disconnect")
+                                .text_color(c(theme::DELETED_TEXT))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    cx.stop_propagation();
+                                    this.switcher = false;
+                                    this.switcher_menu = None;
+                                    this.close_session(ix, window, cx);
+                                })),
+                        )
+                    } else {
+                        d.when(current, |d| d.child(ui::icon("check", 14., theme::TEXT)))
+                    }
+                })
+                .on_mouse_down(
+                    gpui::MouseButton::Right,
+                    cx.listener(move |this, _, _, cx| {
+                        this.switcher_menu = Some(ix);
+                        cx.notify();
+                    }),
+                )
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.activate(ix, window, cx);
+                }))
+        });
+        let action = |id: &'static str, icon: &'static str, label: &'static str| {
+            div()
+                .id(id)
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .h(px(36.))
+                .px(px(10.))
+                .rounded(px(10.))
+                .cursor_pointer()
+                .text_size(px(13.))
+                .hover(|d| d.bg(c(theme::RAISED)))
+                .child(ui::icon(icon, 14., theme::MUTED))
+                .child(div().flex_1().child(label))
+        };
+        gpui::deferred(
+            gpui::anchored().snap_to_window().child(
+                div()
+                    .id("switcher")
+                    .occlude()
+                    .mt(px(36.))
+                    .w(px(396.))
+                    .p(px(8.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .rounded(px(14.))
+                    .bg(c(theme::BG))
+                    .border_1()
+                    .border_color(c(theme::LINE))
+                    .shadow_lg()
+                    .text_color(c(theme::TEXT))
+                    .font_weight(FontWeight::NORMAL)
+                    .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                        this.switcher = false;
+                        this.switcher_menu = None;
+                        cx.notify();
+                    }))
+                    .child(
+                        div()
+                            .px(px(10.))
+                            .pt(px(6.))
+                            .pb(px(6.))
+                            .text_size(px(11.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(c(theme::FAINT))
+                            .child(SharedString::from(format!(
+                                "OPEN CONNECTIONS · {}",
+                                self.sessions.len()
+                            ))),
+                    )
+                    .children(rows)
+                    .child(div().h(px(1.)).my(px(6.)).mx(px(2.)).bg(c(theme::LINE)))
+                    .child(
+                        action("switch-saved", "search", "Connect to a saved connection…")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.switcher = false;
+                                this.show_list(window, cx);
+                            })),
+                    )
+                    .child(
+                        action("switch-new", "plus", "New connection").on_click(cx.listener(
+                            |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.switcher = false;
+                                this.show_dialog(None, window, cx);
+                            },
+                        )),
+                    ),
+            ),
+        )
+        .with_priority(1)
+    }
+
+    /// The schema crumb dropdown.
+    fn render_schema_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let session = self.active.and_then(|ix| self.sessions.get(ix)).cloned();
+        let (schemas, current) = session.as_ref().map_or((Vec::new(), None), |s| {
+            let s = s.read(cx);
+            (s.schemas().to_vec(), s.schema().cloned())
+        });
+        gpui::deferred(
+            gpui::anchored().snap_to_window().child(
+                div()
+                    .id("schema-menu")
+                    .occlude()
+                    .mt(px(36.))
+                    .w(px(224.))
+                    .max_h(px(320.))
+                    .overflow_y_scroll()
+                    .p(px(8.))
+                    .rounded(px(12.))
+                    .bg(c(theme::BG))
+                    .border_1()
+                    .border_color(c(theme::LINE))
+                    .shadow_lg()
+                    .font_weight(FontWeight::NORMAL)
+                    .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                        this.schema_menu = false;
+                        cx.notify();
+                    }))
+                    .children(schemas.into_iter().enumerate().map(|(i, schema)| {
+                        let is_current = current.as_ref() == Some(&schema);
+                        let session = session.clone();
+                        div()
+                            .id(("schema-option", i))
+                            .flex()
+                            .items_center()
+                            .h(px(32.))
+                            .px(px(10.))
+                            .rounded(px(8.))
+                            .cursor_pointer()
+                            .text_size(px(13.))
+                            .when(is_current, |d| d.bg(c(theme::RAISED)))
+                            .hover(|d| d.bg(c(theme::RAISED)))
+                            .child(SharedString::from(schema.to_string()))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.schema_menu = false;
+                                if let Some(session) = &session {
+                                    let schema = schema.clone();
+                                    session.update(cx, |s, cx| s.set_schema(schema, cx));
+                                }
+                                cx.notify();
+                            }))
+                    })),
+            ),
+        )
+        .with_priority(1)
+    }
+}
+
+/// What the breadcrumb shows for the active session.
+struct Crumbs {
+    name: SharedString,
+    engine: SharedString,
+    read_only: bool,
+    database: String,
+    schema: String,
+    pickable: bool,
+    can_query: bool,
+}
+
+/// The `/` between breadcrumb segments.
+fn separator() -> impl IntoElement {
+    div()
+        .px(px(2.))
+        .text_size(px(18.))
+        .font_weight(FontWeight::LIGHT)
+        .text_color(c(0xd4d4d8))
+        .child("/")
+}
+
+/// A breadcrumb segment button.
+fn crumb(id: &'static str) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(id)
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(px(7.))
+        .h(px(30.))
+        .px(px(8.))
+        .rounded(px(8.))
+        .cursor_pointer()
+        .text_size(px(13.))
+        .font_weight(FontWeight::MEDIUM)
+        .hover(|d| d.bg(c(theme::RAISED)))
 }
 
 impl Render for Workspace {
@@ -681,11 +973,17 @@ impl Render for Workspace {
             .on_action(
                 cx.listener(|this, _: &OpenPalette, window, cx| this.open_palette(window, cx)),
             )
+            .on_action(cx.listener(|this, _: &ToggleSwitcher, _, cx| {
+                if !this.sessions.is_empty() {
+                    this.switcher = !this.switcher;
+                    cx.notify();
+                }
+            }))
             .relative()
             .flex()
             .flex_col()
             .size_full()
-            .bg(c(theme::BG))
+            .bg(c(theme::PANEL))
             .font_family(theme::SANS)
             .text_size(px(13.))
             .text_color(c(theme::TEXT))

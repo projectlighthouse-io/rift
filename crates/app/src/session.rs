@@ -60,7 +60,6 @@ pub(crate) struct Session {
     queries: usize,
     schema: Option<SchemaName>,
     schemas: Vec<SchemaName>,
-    schema_menu: bool,
     objects: Vec<DbObject>,
     collapsed: Vec<ObjectKind>,
     filter: Entity<InputState>,
@@ -101,7 +100,6 @@ impl Session {
             queries: 0,
             schema: None,
             schemas: Vec::new(),
-            schema_menu: false,
             objects: Vec::new(),
             collapsed: vec![ObjectKind::View, ObjectKind::Function, ObjectKind::Enum],
             filter,
@@ -163,6 +161,27 @@ impl Session {
     pub(crate) fn engine(&self) -> SharedString {
         // Drivers report the version as it should be shown (`PostgreSQL 16`, `MySQL 8.0`).
         self.conn.info().server_version.clone().into()
+    }
+
+    /// Database name for the breadcrumb; empty when the engine has none.
+    pub(crate) fn database(&self) -> String {
+        self.conn.info().database.clone().unwrap_or_default()
+    }
+
+    /// Current schema, if the engine has schemas and one is loaded.
+    pub(crate) fn schema(&self) -> Option<&SchemaName> {
+        self.schema.as_ref()
+    }
+
+    /// Schemas to pick from in the breadcrumb.
+    pub(crate) fn schemas(&self) -> &[SchemaName] {
+        &self.schemas
+    }
+
+    /// Switches schema and reloads the sidebar.
+    pub(crate) fn set_schema(&mut self, schema: SchemaName, cx: &mut Context<Self>) {
+        self.schema = Some(schema);
+        self.refresh(cx);
     }
 
     /// Reloads schemas and objects.
@@ -440,68 +459,11 @@ impl Session {
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let filter = self.filter.read(cx).value().to_lowercase();
         let selected = self.selected_table(cx);
-        let database = self.conn.info().database.clone().unwrap_or_default();
-        let schema = self
-            .schema
-            .as_ref()
-            .map(|s| s.to_string())
-            .unwrap_or_default();
-
         let header = div()
             .flex()
             .flex_col()
             .gap(px(8.))
             .p(px(12.))
-            .border_b_1()
-            .border_color(c(theme::LINE))
-            .child(
-                div()
-                    .text_size(px(11.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(c(theme::FAINT))
-                    .child("DATABASE · SCHEMA"),
-            )
-            .child(
-                div()
-                    .id("schema-picker")
-                    .relative()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .h(px(32.))
-                    .px(px(10.))
-                    .rounded(px(6.))
-                    .cursor_pointer()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.schema_menu = !this.schema_menu;
-                        cx.notify();
-                    }))
-                    .children(self.schema_menu.then(|| self.render_schema_menu(cx)))
-                    .bg(c(theme::RAISED))
-                    .border_1()
-                    .border_color(c(theme::LINE))
-                    .text_size(px(13.))
-                    .child(ui::icon("database", 14., theme::ACCENT_TEXT))
-                    // Engines without a schema level (MySQL) report the database as the schema.
-                    .when(database != schema && !database.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .text_size(px(12.5))
-                                .child(SharedString::from(database.clone())),
-                        )
-                        .child(div().text_color(c(theme::FAINT)).child("/"))
-                    })
-                    .child(
-                        div()
-                            .text_size(px(12.5))
-                            .child(SharedString::from(schema)),
-                    )
-                    .child(
-                        div()
-                            .ml_auto()
-                            .child(ui::icon("chevron-down", 14., theme::FAINT)),
-                    ),
-            )
             .when(self.conn.edit_rows().is_none(), |d| {
                 let engine = self
                     .conn
@@ -538,7 +500,7 @@ impl Session {
                     .h(px(30.))
                     .pl(px(9.))
                     .pr(px(4.))
-                    .rounded(px(6.))
+                    .rounded(px(10.))
                     .bg(c(theme::BG))
                     .border_1()
                     .border_color(c(theme::LINE))
@@ -624,18 +586,24 @@ impl Session {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .h(px(28.))
+                    .h(px(34.))
+                    .flex_none()
                     .pl(px(26.))
                     .pr(px(10.))
-                    .rounded(px(5.))
+                    .rounded(px(8.))
                     .cursor_pointer()
                     .text_color(c(if is_selected {
                         theme::TEXT
                     } else {
                         theme::MUTED
                     }))
-                    .when(is_selected, |d| d.bg(c(theme::SELECTION)))
-                    .hover(|d| d.bg(c(theme::SELECTION)))
+                    .map(|d| {
+                        if is_selected {
+                            d.bg(c(theme::BG)).shadow(ui::soft_shadow(1., 2., 0.08))
+                        } else {
+                            d.hover(|d| d.bg(c(theme::RAISED)))
+                        }
+                    })
                     .child(ui::icon(
                         if openable { "table" } else { "code" },
                         14.,
@@ -690,14 +658,15 @@ impl Session {
                         .flex()
                         .items_center()
                         .gap(px(8.))
-                        .h(px(28.))
+                        .h(px(34.))
+                        .flex_none()
                         .pl(px(26.))
                         .pr(px(10.))
-                        .rounded(px(5.))
+                        .rounded(px(8.))
                         .cursor_pointer()
-                        .text_size(px(13.))
+                        .text_size(px(12.5))
                         .text_color(c(theme::MUTED))
-                        .hover(|d| d.bg(c(theme::SELECTION)))
+                        .hover(|d| d.bg(c(theme::RAISED)))
                         .child(ui::icon("chart", 14., theme::FAINT))
                         .child(SharedString::from(d.title.clone()))
                         .on_click(cx.listener(move |this, _, window, cx| {
@@ -707,105 +676,56 @@ impl Session {
             }
         }
 
-        let footer = div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(px(8.))
-            .px(px(12.))
-            .py(px(8.))
-            .border_t_1()
-            .border_color(c(theme::LINE))
-            .text_size(px(12.))
-            .text_color(c(theme::FAINT))
-            .child(
-                div()
-                    .size(px(7.))
-                    .rounded(px(2.))
-                    .bg(c(if self.error.is_some() {
+        let footer =
+            div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap(px(8.))
+                .px(px(12.))
+                .py(px(8.))
+                .border_t_1()
+                .border_color(c(theme::LINE))
+                .text_size(px(12.))
+                .text_color(c(theme::FAINT))
+                .child(div().size(px(7.)).flex_none().rounded_full().bg(c(
+                    if self.error.is_some() {
                         theme::DELETED_TEXT
                     } else {
-                        theme::tag_color(Tag::Green)
-                    })),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-                    .child(SharedString::from(match &self.error {
-                        Some(e) => e.clone(),
-                        None => format!("Connected · {}", self.conn.info().address),
-                    })),
-            )
-            .child(
-                div().ml_auto().child(
-                    ui::icon_button("refresh-schema", "refresh", 24., 14.)
-                        .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
-                ),
-            );
+                        theme::CONNECTED
+                    },
+                )))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .child(SharedString::from(match &self.error {
+                            Some(e) => e.clone(),
+                            None => format!("Connected · {}", self.conn.info().address),
+                        })),
+                )
+                .child(
+                    div().ml_auto().child(
+                        ui::icon_button("refresh-schema", "refresh", 24., 14.)
+                            .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                    ),
+                );
 
         div()
             .flex()
             .flex_col()
             .flex_none()
-            .w(px(249.))
+            .w(px(272.))
             .h_full()
-            .bg(c(theme::PANEL))
-            .border_r_1()
-            .border_color(c(theme::LINE))
+            .pt(px(4.))
+            .pl(px(10.))
+            .pr(px(6.))
             .child(header)
             .child(nav)
             .child(footer)
-    }
-
-    fn render_schema_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        gpui::deferred(
-            gpui::anchored().snap_to_window().child(
-                div()
-                    .id("schema-menu")
-                    .occlude()
-                    .mt(px(34.))
-                    .w(px(224.))
-                    .max_h(px(320.))
-                    .overflow_y_scroll()
-                    .p(px(4.))
-                    .rounded(px(6.))
-                    .bg(c(theme::BG))
-                    .border_1()
-                    .border_color(c(theme::LINE))
-                    .shadow_md()
-                    .on_mouse_down_out(cx.listener(|this, _, _, cx| {
-                        this.schema_menu = false;
-                        cx.notify();
-                    }))
-                    .children(self.schemas.iter().enumerate().map(|(i, schema)| {
-                        let picked = schema.clone();
-                        let current = self.schema.as_ref() == Some(schema);
-                        div()
-                            .id(("schema-option", i))
-                            .flex()
-                            .items_center()
-                            .h(px(28.))
-                            .px(px(8.))
-                            .rounded(px(4.))
-                            .cursor_pointer()
-                            .text_size(px(12.5))
-                            .when(current, |d| d.bg(c(theme::SELECTION)))
-                            .hover(|d| d.bg(c(theme::SELECTION)))
-                            .child(SharedString::from(schema.to_string()))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.schema = Some(picked.clone());
-                                this.schema_menu = false;
-                                this.refresh(cx);
-                            }))
-                    })),
-            ),
-        )
-        .with_priority(1)
     }
 
     fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -813,10 +733,9 @@ impl Session {
             .flex()
             .flex_none()
             .items_center()
-            .gap(px(2.))
-            .px(px(8.))
-            .h(px(37.))
-            .bg(c(theme::PANEL))
+            .gap(px(6.))
+            .px(px(14.))
+            .py(px(10.))
             .border_b_1()
             .border_color(c(theme::LINE))
             .children(self.docs.iter().enumerate().map(|(ix, doc)| {
@@ -833,21 +752,12 @@ impl Session {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .h(px(36.))
+                    .h(px(30.))
                     .pl(px(12.))
-                    .pr(px(6.))
+                    .pr(px(4.))
+                    .rounded(px(10.))
                     .cursor_pointer()
-                    .border_b_2()
-                    .border_color(if active {
-                        c(theme::ACCENT)
-                    } else {
-                        gpui::transparent_black().into()
-                    })
-                    .bg(if active {
-                        c(theme::BG)
-                    } else {
-                        gpui::transparent_black().into()
-                    })
+                    .when(active, |d| d.bg(c(theme::RAISED)))
                     .text_color(c(if active { theme::TEXT } else { theme::MUTED }))
                     .child(ui::icon(
                         icon,
@@ -890,14 +800,21 @@ impl Render for Session {
             (None, None) => self.render_sidebar(cx).into_any_element(),
         };
         div().flex().size_full().min_h_0().child(sidebar).child(
+            // The floating white panel: inset from the right and bottom window edges.
             div()
-                .relative()
                 .flex()
                 .flex_col()
                 .flex_1()
                 .min_w_0()
-                .h_full()
-                .child(ui::dot_grid())
+                .mr(px(12.))
+                .mb(px(12.))
+                .ml(px(4.))
+                .rounded(px(14.))
+                .overflow_hidden()
+                .border_1()
+                .border_color(c(theme::LINE))
+                .shadow(ui::soft_shadow(1., 2., 0.04))
+                .bg(c(theme::BG))
                 .child(self.render_tabs(cx))
                 .child(
                     div()

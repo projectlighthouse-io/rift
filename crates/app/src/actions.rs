@@ -13,6 +13,8 @@ actions!(
         SaveChanges,
         /// Open the command palette.
         OpenPalette,
+        /// Open or close the connection switcher.
+        ToggleSwitcher,
     ]
 );
 
@@ -34,5 +36,6 @@ pub(crate) fn bind(cx: &mut App) {
         KeyBinding::new(cmd!("e"), EditConnection, Some("Connections")),
         KeyBinding::new(cmd!("s"), SaveChanges, Some("TableView")),
         KeyBinding::new(cmd!("k"), OpenPalette, None),
+        KeyBinding::new(cmd!("shift-c"), ToggleSwitcher, Some("Workspace")),
     ]);
 }

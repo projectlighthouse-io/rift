@@ -17,6 +17,57 @@ pub(crate) fn icon(name: &str, size_px: f32, color: u32) -> Svg {
         .text_color(c(color))
 }
 
+/// Two-letter engine abbreviation for an engine tile, from a driver id (`postgres`) or an
+/// engine label (`PostgreSQL 16`).
+pub(crate) fn engine_abbr(engine: &str) -> &'static str {
+    let e = engine.to_ascii_lowercase();
+    [
+        ("postgres", "Pg"),
+        ("mysql", "My"),
+        ("sqlite", "Sq"),
+        ("clickhouse", "Ch"),
+        ("redis", "Rd"),
+        ("foundationdb", "Fd"),
+        ("fdb", "Fd"),
+    ]
+    .into_iter()
+    .find(|(prefix, _)| e.starts_with(prefix))
+    .map_or("Db", |(_, abbr)| abbr)
+}
+
+/// Neutral engine tile: the two-letter abbreviation on a raised, bordered square. 22px in the
+/// breadcrumb, 32–36px in lists.
+pub(crate) fn engine_tile(engine: &str, size_px: f32) -> Div {
+    let small = size_px < 30.;
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(px(size_px))
+        .rounded(px(if small { 7. } else { 10. }))
+        .bg(c(theme::RAISED))
+        .border_1()
+        .border_color(c(theme::LINE))
+        .text_size(px(if small { 10. } else { 12. }))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(c(theme::MUTED))
+        .child(engine_abbr(engine))
+}
+
+/// A soft drop shadow: `0 {y}px {blur}px rgba(24,24,27,{alpha})`.
+pub(crate) fn soft_shadow(y: f32, blur: f32, alpha: f32) -> Vec<gpui::BoxShadow> {
+    let mut color = theme::hsla(theme::TEXT);
+    color.a = alpha;
+    vec![gpui::BoxShadow {
+        color,
+        offset: point(px(0.), px(y)),
+        blur_radius: px(blur),
+        spread_radius: px(0.),
+        inset: false,
+    }]
+}
+
 /// A small rounded square in a connection's tag colour.
 pub(crate) fn tag_square(tag: types::Tag, size_px: f32) -> Div {
     div()
@@ -50,7 +101,7 @@ fn button_base(id: impl Into<ElementId>) -> Stateful<Div> {
         .items_center()
         .justify_center()
         .gap(px(6.))
-        .rounded(px(6.))
+        .rounded(px(8.))
         .cursor_pointer()
         .whitespace_nowrap()
 }
@@ -104,7 +155,7 @@ pub(crate) fn ghost_button(
         .child(label.into())
 }
 
-/// Raised secondary button (`Apply`, `SQL`).
+/// White bordered secondary button (`Apply`, `SQL`).
 pub(crate) fn secondary_button(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
@@ -112,13 +163,15 @@ pub(crate) fn secondary_button(
     button_base(id)
         .h(px(28.))
         .px(px(10.))
-        .bg(c(theme::RAISED))
+        .rounded(px(10.))
+        .bg(c(theme::BG))
         .border_1()
         .border_color(c(theme::LINE))
+        .shadow(soft_shadow(1., 1., 0.04))
         .text_color(c(theme::TEXT))
         .text_size(px(13.))
         .font_weight(FontWeight::MEDIUM)
-        .hover(|s| s.bg(c(theme::SELECTION)))
+        .hover(|s| s.bg(c(theme::RAISED)))
         .child(label.into())
 }
 
@@ -141,7 +194,7 @@ pub(crate) fn kbd(text: impl Into<SharedString>) -> Div {
     div().text_size(px(11.)).child(text.into())
 }
 
-/// Faint 2px dots every 22px, painted behind content. Place as the first, absolutely
+/// Faint 1px dots every 22px, painted behind content. Place as the first, absolutely
 /// positioned child of a relative container.
 pub(crate) fn dot_grid() -> impl IntoElement {
     canvas(
@@ -155,13 +208,10 @@ pub(crate) fn dot_grid() -> impl IntoElement {
             for row in 0..rows {
                 for col in 0..cols {
                     let origin = point(
-                        bounds.origin.x + px(half + col as f32 * step - 1.0),
-                        bounds.origin.y + px(half + row as f32 * step - 1.0),
+                        bounds.origin.x + px(half + col as f32 * step),
+                        bounds.origin.y + px(half + row as f32 * step),
                     );
-                    window.paint_quad(
-                        gpui::fill(Bounds::new(origin, size(px(2.), px(2.))), color)
-                            .corner_radii(px(1.)),
-                    );
+                    window.paint_quad(gpui::fill(Bounds::new(origin, size(px(1.), px(1.))), color));
                 }
             }
         },
