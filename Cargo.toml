@@ -94,7 +94,7 @@ lto = "thin"
 
 # GPUI is unusably slow unoptimized (laggy scroll). Optimize dependencies in dev builds; our own
 # crates stay quick to rebuild. Deps are compiled once, so this costs little day to day.
-# `make samply` / `make tracy`: release speed with symbols a profiler can read. `unpacked` skips
+# `make samply`: release speed with symbols a profiler can read. `unpacked` skips
 # the slow dsymutil step; samply reads the object files directly.
 [profile.profiling]
 inherits = "release"

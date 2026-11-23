@@ -43,10 +43,6 @@ fn main() -> anyhow::Result<()> {
         tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
     let logs =
         tracing_subscriber::registry().with(tracing_subscriber::fmt::layer().with_filter(filter));
-    // `--features profiling`: every span, at any level, streams to the Tracy viewer.
-    #[cfg(feature = "profiling")]
-    logs.with(tracing_tracy::TracyLayer::default()).init();
-    #[cfg(not(feature = "profiling"))]
     logs.init();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
