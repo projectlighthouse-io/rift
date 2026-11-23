@@ -41,9 +41,13 @@ fn main() -> anyhow::Result<()> {
     use tracing_subscriber::prelude::*;
     let filter =
         tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
-    let logs =
-        tracing_subscriber::registry().with(tracing_subscriber::fmt::layer().with_filter(filter));
-    logs.init();
+    // Closing spans log their `time.busy`/`time.idle`: `RUST_LOG=rift=debug` shows per-view and
+    // per-query cost (the render and `db` spans are debug level).
+    let fmt = tracing_subscriber::fmt::layer()
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE);
+    tracing_subscriber::registry()
+        .with(fmt.with_filter(filter))
+        .init();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
         .thread_name("rift-io")

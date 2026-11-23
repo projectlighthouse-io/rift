@@ -312,3 +312,4 @@ Format: date, decision, reason.
 - **Spans:** every view's `render` (`Type::render`), the grid's visible-row batch
   (`Grid::rows`), and every `spawn_db` as `db` / `db applied` with the caller's file:line.
   They are `debug` level, so normal logging (`info`) skips them for the cost of a callsite check.
+  `RUST_LOG=rift=debug` logs each span's `time.busy` as it closes.
