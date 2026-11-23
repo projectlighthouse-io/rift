@@ -7,7 +7,7 @@ use gpui::prelude::*;
 use gpui::{
     AnyElement, Context, Entity, FontWeight, SharedString, Subscription, Window, canvas, div, px,
 };
-use types::{ObjectKind, SafeMode, SavedConnection, Tag};
+use types::{ObjectKind, SafeMode, SavedConnection};
 
 use crate::actions::{OpenPalette, ToggleSwitcher};
 use crate::connection_dialog::{ConnectionDialog, DialogEvent};
@@ -460,11 +460,9 @@ impl Workspace {
                 Ok(conn) => {
                     // The connections search had focus and is going away; keep ⌘K working.
                     window.focus(&this.focus, cx);
-                    let tag = saved.tag.unwrap_or(Tag::Green);
                     let session = cx.new(|cx| {
                         let mut s = Session::new(
                             saved.name.clone().into(),
-                            tag,
                             saved.safe_mode,
                             saved.id,
                             conn,

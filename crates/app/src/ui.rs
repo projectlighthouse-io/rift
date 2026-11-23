@@ -68,15 +68,6 @@ pub(crate) fn soft_shadow(y: f32, blur: f32, alpha: f32) -> Vec<gpui::BoxShadow>
     }]
 }
 
-/// A small rounded square in a connection's tag colour.
-pub(crate) fn tag_square(tag: types::Tag, size_px: f32) -> Div {
-    div()
-        .size(px(size_px))
-        .flex_none()
-        .rounded(px(2.))
-        .bg(c(theme::tag_color(tag)))
-}
-
 /// A pill such as `READ-ONLY` or `2 edited`.
 pub(crate) fn badge(text: impl Into<SharedString>, fg: u32, bg: u32) -> Div {
     div()
@@ -101,7 +92,7 @@ fn button_base(id: impl Into<ElementId>) -> Stateful<Div> {
         .items_center()
         .justify_center()
         .gap(px(6.))
-        .rounded(px(8.))
+        .rounded(px(10.))
         .cursor_pointer()
         .whitespace_nowrap()
 }

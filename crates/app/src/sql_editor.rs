@@ -20,7 +20,7 @@ use gpui_component::input::{
 use lsp_types::CompletionItemKind;
 use tokio_util::sync::CancellationToken;
 use traits::{Connection, StatementOutput};
-use types::{Column, ConnectionId, Error, HistoryEntry, ObjectKind, Row, SafeMode, Tag};
+use types::{Column, ConnectionId, Error, HistoryEntry, ObjectKind, Row, SafeMode};
 
 use crate::chart_panel::{ChartPanel, PinChart};
 use crate::grid::Grid;
@@ -86,7 +86,6 @@ pub(crate) struct SqlEditor {
     conn: Arc<dyn Connection>,
     connection_id: ConnectionId,
     label: SharedString,
-    tag: Tag,
     pub(crate) title: SharedString,
     editor: Entity<EditorState>,
     current: RangeDecorationCollection,
@@ -113,7 +112,6 @@ impl SqlEditor {
         conn: Arc<dyn Connection>,
         connection_id: ConnectionId,
         label: SharedString,
-        tag: Tag,
         title: SharedString,
         sql: String,
         window: &mut Window,
@@ -147,7 +145,6 @@ impl SqlEditor {
             conn,
             connection_id,
             label,
-            tag,
             title,
             editor,
             current,
@@ -677,7 +674,7 @@ impl SqlEditor {
                     .gap(px(8.))
                     .text_size(px(12.))
                     .text_color(c(theme::FAINT))
-                    .child(ui::tag_square(self.tag, 7.))
+                    .child(div().size(px(7.)).rounded_full().bg(c(theme::CONNECTED)))
                     .child(self.label.clone())
                     .child(
                         div()

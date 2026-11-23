@@ -7,7 +7,7 @@ use gpui::{
 };
 use gpui_component::input::{InputEvent, InputState};
 use gpui_component::text::TextView;
-use types::{FieldKind, SavedConnection, Tag};
+use types::{FieldKind, SavedConnection};
 
 use crate::actions::{EditConnection, NewConnection};
 use crate::theme::{self, c};
@@ -61,10 +61,16 @@ pub(crate) fn address(connection: &SavedConnection, cx: &gpui::App) -> String {
         .fields
         .iter()
         .filter(|f| f.kind != FieldKind::Password);
-    file.chain(rest)
+    let text = file
+        .chain(rest)
         .find_map(|f| value(f.key.as_str()))
         .cloned()
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // `/Users/me/code/x.sqlite` → `~/code/x.sqlite`.
+    match dirs::home_dir().and_then(|h| text.strip_prefix(h.to_str()?).map(str::to_owned)) {
+        Some(rest) if rest.starts_with('/') => format!("~{rest}"),
+        _ => text,
+    }
 }
 
 /// Sort key putting known groups first.
@@ -169,59 +175,57 @@ impl ConnectionsScreen {
             .flex()
             .items_center()
             .gap(px(12.))
-            .h(px(44.))
-            .px(px(12.))
-            .rounded(px(4.))
+            .h(px(64.))
+            .px(px(14.))
+            .rounded(px(12.))
             .cursor_pointer()
-            .when(selected, |d| d.bg(c(theme::SELECTION)))
-            .hover(|d| d.bg(c(theme::SELECTION)))
-            .child(ui::tag_square(conn.tag.unwrap_or(Tag::Green), 10.))
+            .when(selected, |d| d.bg(c(theme::RAISED)))
+            .hover(|d| d.bg(c(theme::RAISED)))
+            .child(ui::engine_tile(conn.driver.as_str(), 36.))
             .child(
-                div()
-                    .text_size(px(13.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(SharedString::from(conn.name.clone())),
-            )
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(c(theme::FAINT))
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-                    .child(SharedString::from(address(conn, cx))),
-            )
-            .when(selected, |d| {
-                let edit = conn.clone();
-                d.child(div().ml_auto().child(
-                    ui::ghost_button(("edit-conn", ix), "Edit").on_click(cx.listener(
-                        move |_, _, _, cx| {
-                            cx.stop_propagation();
-                            cx.emit(ConnectionsEvent::Edit(edit.clone()));
-                        },
-                    )),
-                ))
-            })
-            .child(div().when(!selected, |d| d.ml_auto()).child(if selected {
                 div()
                     .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .h(px(26.))
-                    .px(px(10.))
-                    .rounded(px(4.))
-                    .bg(c(theme::PRIMARY))
-                    .text_color(c(theme::BG))
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .child("Connect")
-                    .child(ui::kbd("↵").opacity(0.85))
-            } else {
-                div()
-                    .text_size(px(12.))
-                    .text_color(c(theme::FAINT))
-                    .child(engine)
-            }))
+                    .flex_col()
+                    .gap(px(3.))
+                    .min_w_0()
+                    .flex_1()
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(SharedString::from(conn.name.clone())),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .text_color(c(theme::FAINT))
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .child(SharedString::from(format!(
+                                "{engine} · {}",
+                                address(conn, cx)
+                            ))),
+                    ),
+            )
+            .when(selected, |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .gap(px(6.))
+                        .h(px(26.))
+                        .px(px(10.))
+                        .rounded(px(8.))
+                        .bg(c(theme::PRIMARY))
+                        .text_color(c(theme::BG))
+                        .text_size(px(12.5))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child("Connect")
+                        .child(ui::kbd("↵").opacity(0.85)),
+                )
+            })
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.selected = ix;
                 cx.emit(ConnectionsEvent::Connect(picked.clone()));
@@ -241,16 +245,16 @@ impl Render for ConnectionsScreen {
             .bg(c(theme::BG))
             .border_1()
             .border_color(c(theme::LINE))
-            .rounded(px(6.));
+            .rounded(px(10.));
         let mut last_group: Option<String> = None;
         for (ix, conn) in visible.iter().enumerate() {
             let group = conn.group.clone().unwrap_or_else(|| "Other".into());
             if last_group.as_ref() != Some(&group) {
                 card = card.child(
                     div()
-                        .mt(px(16.))
-                        .mb(px(4.))
-                        .px(px(12.))
+                        .mt(px(22.))
+                        .mb(px(8.))
+                        .px(px(14.))
                         .text_size(px(11.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(c(theme::FAINT))
@@ -324,7 +328,7 @@ impl Render for ConnectionsScreen {
                         .gap(px(6.))
                         .h(px(32.))
                         .px(px(12.))
-                        .rounded(px(4.))
+                        .rounded(px(8.))
                         .bg(c(theme::BG))
                         .border_1()
                         .border_color(c(theme::LINE))
@@ -345,7 +349,7 @@ impl Render for ConnectionsScreen {
             .h(px(40.))
             .pl(px(12.))
             .pr(px(8.))
-            .rounded(px(4.))
+            .rounded(px(8.))
             .bg(c(theme::BG))
             .border_1()
             .border_color(c(theme::LINE))
@@ -390,7 +394,7 @@ impl Render for ConnectionsScreen {
                 .text_size(px(12.))
                 .text_center()
                 .text_color(c(theme::FAINT))
-                .child("Click a connection to open it · ↑↓ to move · ↵ to connect · ⌘E to edit"),
+                .child("Click a connection to open it · ↑↓ to move · ↵ to connect"),
         };
 
         div()

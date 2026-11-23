@@ -10,7 +10,7 @@ use gpui_component::input::{InputEvent, InputState};
 use traits::Connection;
 use types::{
     ConnectionId, Dashboard, DbObject, Error, Filter, KeyBytes, KeyDirectory, ObjectKind, SafeMode,
-    SchemaName, TableRef, Tag,
+    SchemaName, TableRef,
 };
 
 use crate::dashboard_view::{AddChart, DashboardView};
@@ -53,7 +53,6 @@ impl Doc {
 /// A live connection and its workspace.
 pub(crate) struct Session {
     pub(crate) name: SharedString,
-    pub(crate) tag: Tag,
     pub(crate) safe_mode: SafeMode,
     pub(crate) conn: Arc<dyn Connection>,
     id: ConnectionId,
@@ -78,7 +77,6 @@ pub(crate) struct Session {
 impl Session {
     pub(crate) fn new(
         name: SharedString,
-        tag: Tag,
         safe_mode: SafeMode,
         id: ConnectionId,
         conn: Arc<dyn Connection>,
@@ -93,7 +91,6 @@ impl Session {
         });
         let mut session = Self {
             name,
-            tag,
             safe_mode,
             conn,
             id,
@@ -376,8 +373,8 @@ impl Session {
             Some(db) => format!("{} · {db}", self.name).into(),
             None => self.name.clone(),
         };
-        let (conn, id, tag) = (self.conn.clone(), self.id, self.tag);
-        let editor = cx.new(|cx| SqlEditor::new(conn, id, label, tag, title, sql, window, cx));
+        let (conn, id) = (self.conn.clone(), self.id);
+        let editor = cx.new(|cx| SqlEditor::new(conn, id, label, title, sql, window, cx));
         let mode = self.safe_mode;
         editor.update(cx, |e, _| e.set_safe_mode(mode));
         self._subscriptions

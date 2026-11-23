@@ -480,44 +480,6 @@ impl Render for ConnectionDialog {
 
         body = body.child(
             div()
-                .flex()
-                .flex_col()
-                .gap(px(8.))
-                .child(label("Tag"))
-                .child(
-                    div()
-                        .flex()
-                        .gap(px(10.))
-                        .children(Tag::ALL.iter().map(|&tag| {
-                            let selected = self.tag == tag;
-                            div()
-                                .id(SharedString::from(format!("tag-{tag:?}")))
-                                .relative()
-                                .size(px(20.))
-                                .cursor_pointer()
-                                .child(ui::tag_square(tag, 20.).rounded(px(3.)))
-                                .when(selected, |d| {
-                                    d.child(
-                                        div()
-                                            .absolute()
-                                            .top(px(-4.))
-                                            .left(px(-4.))
-                                            .size(px(28.))
-                                            .rounded(px(5.))
-                                            .border_2()
-                                            .border_color(c(theme::MUTED)),
-                                    )
-                                })
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.tag = tag;
-                                    cx.notify();
-                                }))
-                        })),
-                ),
-        );
-
-        body = body.child(
-            div()
                 .id("more-options")
                 .flex()
                 .items_center()

@@ -50,18 +50,6 @@ pub(crate) const DOT: u32 = 0xe4e4e7;
 /// Dot grid spacing in pixels.
 pub(crate) const DOT_SPACING: f32 = 22.0;
 
-/// Soft connection tag colours, in [`types::Tag::ALL`] order.
-pub(crate) fn tag_color(tag: types::Tag) -> u32 {
-    match tag {
-        types::Tag::Green => 0x7bb08a,
-        types::Tag::Teal => 0x72aeb3,
-        types::Tag::Blue => 0x88a6dc,
-        types::Tag::Purple => 0xa597d8,
-        types::Tag::Orange => 0xd6a06a,
-        _ => 0xd98a85,
-    }
-}
-
 /// Font for all interface text and grid data (bundled).
 pub(crate) const SANS: &str = "Inter";
 
