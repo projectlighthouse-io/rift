@@ -29,6 +29,8 @@ pub(crate) const ACCENT_TEXT: u32 = 0xc2453d;
 pub(crate) const ACCENT: u32 = 0xe57368;
 /// Primary button background.
 pub(crate) const PRIMARY: u32 = 0x18181b;
+/// Every other grid row.
+pub(crate) const STRIPE: u32 = 0xfafaf9;
 /// Selected rows and list items.
 pub(crate) const SELECTION: u32 = 0xf4f4f5;
 /// Edited cell background / text / outline.

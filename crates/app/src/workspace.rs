@@ -67,6 +67,15 @@ impl Workspace {
         };
         window.focus(&workspace.focus, cx);
         workspace.show_list(window, cx);
+        // Dev check: `RIFT_DEV_CONNECT=a,b` connects to these saved connections at startup.
+        if let Ok(names) = std::env::var("RIFT_DEV_CONNECT") {
+            let saved = state::manager(cx).list().unwrap_or_default();
+            for name in names.split(',') {
+                if let Some(conn) = saved.iter().find(|s| s.name == name.trim()) {
+                    workspace.connect(conn.clone(), window, cx);
+                }
+            }
+        }
         workspace
     }
 
@@ -465,6 +474,13 @@ impl Workspace {
                         // Dev check: `RIFT_DEV_QUERY` opens a query tab with that SQL.
                         if let Ok(sql) = std::env::var("RIFT_DEV_QUERY") {
                             s.open_query(sql, window, cx);
+                        }
+                        // Dev check: `RIFT_DEV_TABLE=schema.table` opens that table.
+                        if let Ok(path) = std::env::var("RIFT_DEV_TABLE") {
+                            let (schema, name) = path
+                                .split_once('.')
+                                .map_or((None, path.as_str()), |(s, n)| (Some(s.into()), n));
+                            s.open_table(types::TableRef::new(schema, name), None, window, cx);
                         }
                         s
                     });

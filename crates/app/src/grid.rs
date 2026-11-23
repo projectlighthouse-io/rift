@@ -4,7 +4,7 @@
 
 use gpui::prelude::*;
 use gpui::{
-    Context, Entity, EventEmitter, FontFeatures, FontWeight, KeyDownEvent, MouseButton,
+    BoxShadow, Context, Entity, EventEmitter, FontFeatures, FontWeight, KeyDownEvent, MouseButton,
     SharedString, Subscription, UniformListScrollHandle, Window, anchored, deferred, div, px,
     uniform_list,
 };
@@ -15,8 +15,8 @@ use crate::theme::{self, c};
 use crate::ui;
 
 /// Row height including its bottom border.
-pub(crate) const ROW_HEIGHT: f32 = 31.0;
-const HEADER_HEIGHT: f32 = 33.0;
+pub(crate) const ROW_HEIGHT: f32 = 41.0;
+const HEADER_HEIGHT: f32 = 41.0;
 const ROW_NUMBER_WIDTH: f32 = 64.0;
 /// Approximate Inter advance at 12.5px / 12px / 11px, rounded up so widths rarely clip.
 // ponytail: char-count estimate; measure with the text system if columns look off.
@@ -220,7 +220,8 @@ impl Grid {
                     .max()
                     .unwrap_or(0) as f32
                     * CELL_CHAR;
-                (header.max(widest) + 21.0).clamp(48.0, MAX_WIDTH)
+                // Header cells pad 14px a side, data cells 10px (the design).
+                (header + 29.0).max(widest + 21.0).clamp(48.0, MAX_WIDTH)
             })
             .collect();
     }
@@ -290,8 +291,7 @@ impl Grid {
                 .items_center()
                 .w(px(w))
                 .h(px(HEADER_HEIGHT))
-                .px(px(10.))
-                .border_r_1()
+                .px(px(14.))
                 .border_b_1()
                 .border_color(c(theme::LINE))
                 .bg(c(theme::PANEL))
@@ -345,6 +345,7 @@ impl Grid {
                             .child(
                                 div()
                                     .text_size(px(11.))
+                                    .font_weight(FontWeight::NORMAL)
                                     .text_color(c(theme::FAINT))
                                     .child(SharedString::from(col.type_name.clone())),
                             )
@@ -374,6 +375,8 @@ impl Grid {
             RowMark::None => (
                 if selected {
                     theme::SELECTION
+                } else if ix % 2 == 1 {
+                    theme::STRIPE
                 } else {
                     theme::BG
                 },
@@ -400,8 +403,6 @@ impl Grid {
                     .w(px(ROW_NUMBER_WIDTH))
                     .h_full()
                     .px(px(10.))
-                    .border_r_1()
-                    .border_color(c(theme::LINE))
                     .text_size(px(11.5))
                     .text_color(c(number_fg))
                     .child(label),
@@ -415,8 +416,6 @@ impl Grid {
                     .w(px(width))
                     .h_full()
                     .px(px(10.))
-                    .border_r_1()
-                    .border_color(c(theme::LINE))
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .text_size(px(12.5))
@@ -444,44 +443,89 @@ impl Grid {
                     .as_ref()
                     .filter(|e| (e.row, e.col) == (ix, col))
                 {
-                    return cell
-                        .px(px(2.))
-                        .bg(c(theme::BG))
-                        .border_2()
-                        .border_color(c(theme::ACCENT))
-                        .child(ui::input(&editing.input, 12.5));
+                    return cell.child(
+                        pill(theme::BG, focus_ring())
+                            .flex_1()
+                            .py(px(0.))
+                            .px(px(0.))
+                            .child(ui::input(&editing.input, 12.5)),
+                    );
                 }
-                if self.numeric.get(col).copied().unwrap_or(false) {
+                let numeric = self.numeric.get(col).copied().unwrap_or(false);
+                if numeric {
                     cell = cell.justify_end();
                 }
-                let edited = row.edited.get(col).copied().unwrap_or(false);
-                let mut fg = row_fg;
-                if edited && row.mark == RowMark::None {
-                    cell = cell
-                        .bg(c(theme::EDITED_BG))
-                        .border_1()
-                        .border_color(c(theme::EDITED_RING));
-                    fg = theme::EDITED_TEXT;
-                }
-                if self.focused_cell == Some((ix, col)) {
-                    cell = cell.border_2().border_color(c(theme::ACCENT));
-                }
+                let edited =
+                    row.mark == RowMark::None && row.edited.get(col).copied().unwrap_or(false);
+                let focused = self.focused_cell == Some((ix, col));
                 if row.mark == RowMark::Deleted {
                     cell = cell.line_through();
                 }
-                if value.is_null() {
+                let fg = if edited { theme::EDITED_TEXT } else { row_fg };
+                let content = if value.is_null() {
                     let null_fg = if row.mark == RowMark::None && !edited {
                         theme::FAINT
                     } else {
                         fg
                     };
-                    cell.text_color(c(null_fg)).italic().child("NULL")
+                    div().text_color(c(null_fg)).italic().child("NULL")
                 } else {
-                    cell.text_color(c(fg))
+                    div()
+                        .text_color(c(fg))
+                        .overflow_hidden()
                         .text_ellipsis()
                         .child(SharedString::from(cell_text(value)))
+                };
+                // Edited and focused values sit in a soft pill; the cell itself has no box.
+                if focused {
+                    cell.child(pill(theme::BG, focus_ring()).child(content))
+                } else if edited {
+                    cell.child(pill(theme::EDITED_BG, edited_ring()).child(content))
+                } else {
+                    cell.child(content)
                 }
             }))
+    }
+}
+
+/// The value pill: radius 7, 4px × 8px padding, pulled 8px out so its text stays aligned.
+fn pill(bg: u32, ring: Vec<BoxShadow>) -> gpui::Div {
+    div()
+        .flex()
+        .items_center()
+        .min_w_0()
+        .mx(px(-8.))
+        .px(px(8.))
+        .py(px(4.))
+        .rounded(px(7.))
+        .bg(c(bg))
+        .shadow(ring)
+}
+
+/// `0 0 0 1.5px #e57368, 0 0 0 4px rgba(229,115,104,0.15)`.
+fn focus_ring() -> Vec<BoxShadow> {
+    let mut halo = theme::hsla(theme::ACCENT);
+    halo.a = 0.15;
+    vec![ring(theme::hsla(theme::ACCENT), 1.5), ring(halo, 4.)]
+}
+
+/// `inset 0 0 0 1px rgba(154,103,0,0.18)`.
+fn edited_ring() -> Vec<BoxShadow> {
+    let mut color = theme::hsla(theme::EDITED_TEXT);
+    color.a = 0.18;
+    vec![BoxShadow {
+        inset: true,
+        ..ring(color, 1.)
+    }]
+}
+
+fn ring(color: gpui::Hsla, spread: f32) -> BoxShadow {
+    BoxShadow {
+        color,
+        offset: gpui::point(px(0.), px(0.)),
+        blur_radius: px(0.),
+        spread_radius: px(spread),
+        inset: false,
     }
 }
 
