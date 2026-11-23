@@ -301,6 +301,29 @@ Format: date, decision, reason.
 - **About window** from the Rift menu: icon, version, "Rift — a Project Lighthouse project".
   ⌘Q quits.
 
+## 2026-11-24 — Redesign
+
+- **Updated mockups replace the old ones in `design/`** (Forge-style: zinc neutrals, ground
+  `#fafafa`, breadcrumb top bar, floating white panel inset 12px, soft pill tabs, engine tiles,
+  no colour tags). Where §4 of the brief and the HTML disagree, the HTML wins.
+- **Connection tabs are gone.** The connection crumb opens a switcher dropdown (⌘⇧C); each open
+  connection keeps its own sidebar and tabs. Disconnect is a right-click on a switcher row.
+- **Schema moved to the breadcrumb.** The database crumb is plain text: switching databases needs
+  driver support that doesn't exist yet.
+- **Value pills** for edited and focused cells are box shadows (focus: 1.5px coral ring plus a 4px
+  15% halo; edited: inset 1px ring), so the cell itself never gets a box.
+- **The current-statement band in the SQL editor stays text-width.** `gpui-component`'s range
+  decorations have no full-line style; a full-width band would mean painting under the editor
+  with its scroll offset.
+- **Radii:** 10px for buttons, tabs, selects; 8px for inputs and chips; 12–16px for menus,
+  cards and dialogs; 6px for kbd and count chips; 3px for bar charts.
+- **Screenshot dev switches:** `RIFT_DEV_CONNECT=a,b` connects to saved connections at startup,
+  `RIFT_DEV_TABLE=schema.table` opens a table, `RIFT_DEV_OPEN=` `dialog`, `switcher`, `palette`,
+  `dashboard`, `structure`, `stats`, `chart` or `key:<name>` opens that screen 1.5 s later, and
+  `RIFT_DEV_BACKGROUND=1` opens a floating window that doesn't take keyboard focus. With
+  `RIFT_DATA_DIR` and `RIFT_DEV_INSECURE_SECRETS` this lets `screencapture -l` check every
+  screen without clicking.
+
 ## 2026-11-23 — Profiling
 
 - **samply only.** `make samply` records a release-speed build and opens a flamegraph in the

@@ -302,7 +302,7 @@ impl Render for Palette {
             .w(px(620.))
             .flex()
             .flex_col()
-            .rounded(px(10.))
+            .rounded(px(16.))
             .bg(c(theme::BG))
             .border_1()
             .border_color(c(theme::LINE))

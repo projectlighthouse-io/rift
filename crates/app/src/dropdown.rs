@@ -71,7 +71,7 @@ impl Render for Dropdown {
             .pl(px(8.))
             .pr(px(6.))
             .gap(px(6.))
-            .rounded(px(8.))
+            .rounded(px(10.))
             .bg(c(theme::BG))
             .border_1()
             .border_color(c(theme::LINE))

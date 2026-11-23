@@ -9,10 +9,17 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 - New typefaces: Inter for the interface and data (numbers line up in the grid), JetBrains Mono
   only for SQL, DDL and JSON. Both are bundled with the app.
+- Redesigned to the updated mockups: zinc palette, a breadcrumb top bar (connection, database,
+  schema) instead of connection tabs, content in a floating white panel, pill tabs, and roomier
+  40px grid rows with no vertical lines. Edited and focused cells show their value in a soft pill.
+- Switch connections from the connection crumb or ⌘⇧C; right-click an open connection to
+  disconnect it. The schema picker moved from the sidebar to the schema crumb.
+- Connections are identified by a neutral engine tile (Pg, My, Sq, Ch, Rd, Fd) instead of a
+  colour tag; the tag picker is gone from the connection dialog.
+- ⌘E still edits the highlighted saved connection; the Edit button is gone, as in the design.
 
 ### Added
 
-- Edit button on the selected saved connection (also ⌘E, now shown in the hint line).
 - Connection errors are selectable, with a button to copy them.
 
 ### Fixed

@@ -995,8 +995,9 @@ impl Render for Workspace {
                 .into_any_element(),
         };
         let overlay = self.palette.as_ref().map(|(palette, _)| {
-            let mut veil = theme::hsla(theme::BG);
-            veil.a = 0.82;
+            // The palette sits on the dot grid; the app behind is all but hidden.
+            let mut veil = theme::hsla(theme::PANEL);
+            veil.a = 0.96;
             div()
                 .absolute()
                 .top_0()
