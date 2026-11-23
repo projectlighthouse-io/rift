@@ -164,6 +164,15 @@ impl SqlEditor {
         };
         view.load_schema_names(names, cx);
         view.mark_current_statement(cx);
+        // Dev check: `RIFT_DEV_OPEN=chart` runs the script and shows its Chart tab.
+        crate::ui::dev_open(window, cx, |this: &mut Self, open, window, cx| {
+            if open == "chart" {
+                this.run_all(cx);
+                crate::ui::dev_open(window, cx, |this: &mut Self, _, window, cx| {
+                    this.open_chart(window, cx)
+                });
+            }
+        });
         view
     }
 
@@ -708,7 +717,7 @@ impl SqlEditor {
                     .max_h(px(360.))
                     .overflow_y_scroll()
                     .p(px(4.))
-                    .rounded(px(6.))
+                    .rounded(px(8.))
                     .bg(c(theme::BG))
                     .border_1()
                     .border_color(c(theme::LINE))
@@ -745,7 +754,7 @@ impl SqlEditor {
                             .gap(px(2.))
                             .px(px(8.))
                             .py(px(6.))
-                            .rounded(px(4.))
+                            .rounded(px(8.))
                             .cursor_pointer()
                             .hover(|d| d.bg(c(theme::SELECTION)))
                             .child(
@@ -782,22 +791,18 @@ impl SqlEditor {
                 .id(("result-tab", ix))
                 .flex()
                 .items_center()
-                .h(px(34.))
-                .px(px(4.))
+                .h(px(28.))
+                .px(px(12.))
+                .rounded(px(10.))
                 .text_size(px(12.5))
                 .font_weight(FontWeight::MEDIUM)
                 .cursor_pointer()
-                .border_b_2()
-                .border_color(if active {
-                    c(theme::ACCENT)
-                } else {
-                    gpui::transparent_black().into()
-                })
+                .when(active, |d| d.bg(c(theme::RAISED)))
                 .text_color(c(if active { theme::TEXT } else { theme::MUTED }))
                 .child(SharedString::from(label))
         };
         let messages_ix = self.results.len();
-        let mut tabs = div().flex().gap(px(18.));
+        let mut tabs = div().flex().items_center().gap(px(6.));
         for (i, r) in self.results.iter().enumerate() {
             tabs = tabs.child(
                 tab(
@@ -837,6 +842,7 @@ impl SqlEditor {
             .flex_none()
             .items_center()
             .gap(px(18.))
+            .h(px(36.))
             .px(px(12.))
             .bg(c(theme::PANEL))
             .border_b_1()
@@ -879,7 +885,7 @@ impl SqlEditor {
                                             .mt(px(30.))
                                             .w(px(140.))
                                             .p(px(4.))
-                                            .rounded(px(6.))
+                                            .rounded(px(8.))
                                             .bg(c(theme::BG))
                                             .border_1()
                                             .border_color(c(theme::LINE))
@@ -896,7 +902,7 @@ impl SqlEditor {
                                                         .px(px(8.))
                                                         .flex()
                                                         .items_center()
-                                                        .rounded(px(4.))
+                                                        .rounded(px(8.))
                                                         .text_size(px(13.))
                                                         .cursor_pointer()
                                                         .hover(|d| d.bg(c(theme::SELECTION)))

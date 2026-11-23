@@ -461,6 +461,9 @@ impl Session {
             .flex_col()
             .gap(px(8.))
             .p(px(12.))
+            .bg(c(theme::BG))
+            .border_b_1()
+            .border_color(c(theme::LINE))
             .when(self.conn.edit_rows().is_none(), |d| {
                 let engine = self
                     .conn
@@ -475,7 +478,7 @@ impl Session {
                         .flex()
                         .gap(px(8.))
                         .p(px(10.))
-                        .rounded(px(6.))
+                        .rounded(px(8.))
                         .bg(c(theme::EDITED_BG))
                         .text_size(px(12.5))
                         .text_color(c(theme::EDITED_TEXT))

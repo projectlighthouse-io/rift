@@ -271,7 +271,8 @@ pub(crate) fn chart_element(model: ChartModel) -> impl IntoElement {
                         }
                     }
                     kind => {
-                        if matches!(kind, ChartKind::Area | ChartKind::Number) && pts.len() > 1 {
+                        // Lines get a faint wash underneath (the design); Area a stronger one.
+                        if kind != ChartKind::Scatter && pts.len() > 1 {
                             let mut b = PathBuilder::fill();
                             b.move_to(point(px(pts[0].0), px(oy + top + h)));
                             for (x, y) in &pts {
@@ -280,7 +281,8 @@ pub(crate) fn chart_element(model: ChartModel) -> impl IntoElement {
                             b.line_to(point(px(pts[pts.len() - 1].0), px(oy + top + h)));
                             b.close();
                             if let Ok(path) = b.build() {
-                                window.paint_path(path, hsla(color, 0.14));
+                                let alpha = if kind == ChartKind::Line { 0.08 } else { 0.14 };
+                                window.paint_path(path, hsla(color, alpha));
                             }
                         }
                         if kind != ChartKind::Scatter && pts.len() > 1 {
@@ -532,16 +534,17 @@ pub(crate) fn svg(model: &ChartModel, title: &str, width: f32, height: f32) -> S
                 }
             }
             kind => {
-                if kind == ChartKind::Area
+                if kind != ChartKind::Scatter
                     && let (Some(first), Some(last)) = (pts.first(), pts.last())
                 {
                     out.push_str(&format!(
-                        "<polygon points='{},{} {} {},{}' fill='{color}' fill-opacity='0.14'/>",
+                        "<polygon points='{},{} {} {},{}' fill='{color}' fill-opacity='{}'/>",
                         first.0,
                         top + h,
                         poly.join(" "),
                         last.0,
-                        top + h
+                        top + h,
+                        if kind == ChartKind::Line { 0.08 } else { 0.14 }
                     ));
                 }
                 if kind != ChartKind::Scatter {

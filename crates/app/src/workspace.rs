@@ -67,6 +67,9 @@ impl Workspace {
         };
         window.focus(&workspace.focus, cx);
         workspace.show_list(window, cx);
+        if std::env::var("RIFT_DEV_OPEN").as_deref() == Ok("dialog") {
+            workspace.show_dialog(None, window, cx);
+        }
         // Dev check: `RIFT_DEV_CONNECT=a,b` connects to these saved connections at startup.
         if let Ok(names) = std::env::var("RIFT_DEV_CONNECT") {
             let saved = state::manager(cx).list().unwrap_or_default();
@@ -481,6 +484,32 @@ impl Workspace {
                             s.open_table(types::TableRef::new(schema, name), None, window, cx);
                         }
                         s
+                    });
+                    // Dev check: `RIFT_DEV_OPEN=switcher|palette|dashboard`.
+                    ui::dev_open(window, cx, |this: &mut Self, open, window, cx| match open {
+                        "switcher" => {
+                            this.switcher = true;
+                            cx.notify();
+                        }
+                        "palette" => this.open_palette(window, cx),
+                        "dashboard" => {
+                            if let Some(s) = this.active.and_then(|i| this.sessions.get(i)).cloned()
+                            {
+                                s.update(cx, |s, cx| {
+                                    if let Some(d) = s.dashboards().first().cloned() {
+                                        s.open_dashboard(d, window, cx);
+                                    }
+                                });
+                            }
+                        }
+                        key if key.starts_with("key:") => {
+                            if let Some(s) = this.active.and_then(|i| this.sessions.get(i)).cloned()
+                            {
+                                let key = types::KeyBytes::from(&key[4..]);
+                                s.update(cx, |s, cx| s.open_key(key, window, cx));
+                            }
+                        }
+                        _ => {}
                     });
                     this.sessions.push(session);
                     this.active = Some(this.sessions.len() - 1);

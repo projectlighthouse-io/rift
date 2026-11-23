@@ -258,7 +258,7 @@ impl Render for Palette {
                     .gap(px(10.))
                     .h(px(40.))
                     .px(px(12.))
-                    .rounded(px(6.))
+                    .rounded(px(8.))
                     .cursor_pointer()
                     .when(selected, |d| d.bg(c(theme::SELECTION)))
                     .hover(|d| d.bg(c(theme::SELECTION)))
@@ -322,7 +322,7 @@ impl Render for Palette {
                     .child(
                         div()
                             .px(px(6.))
-                            .rounded(px(4.))
+                            .rounded(px(8.))
                             .border_1()
                             .border_color(c(theme::LINE))
                             .text_size(px(11.))

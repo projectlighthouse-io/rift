@@ -74,7 +74,7 @@ pub(crate) fn badge(text: impl Into<SharedString>, fg: u32, bg: u32) -> Div {
         .flex_none()
         .px(px(6.))
         .py(px(2.))
-        .rounded(px(4.))
+        .rounded(px(8.))
         .text_size(px(11.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(c(fg))
@@ -185,7 +185,26 @@ pub(crate) fn kbd(text: impl Into<SharedString>) -> Div {
     div().text_size(px(11.)).child(text.into())
 }
 
-/// Faint 1px dots every 22px, painted behind content. Place as the first, absolutely
+/// Dev check: when `RIFT_DEV_OPEN` is set, calls `f` with its value 1.5 s from now, so
+/// screenshots can reach screens that need a click.
+pub(crate) fn dev_open<V: 'static>(
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<V>,
+    f: impl FnOnce(&mut V, &str, &mut gpui::Window, &mut gpui::Context<V>) + 'static,
+) {
+    let Ok(open) = std::env::var("RIFT_DEV_OPEN") else {
+        return;
+    };
+    cx.spawn_in(window, async move |this, cx| {
+        cx.background_executor()
+            .timer(std::time::Duration::from_millis(1500))
+            .await;
+        let _ = this.update_in(cx, |this, window, cx| f(this, &open, window, cx));
+    })
+    .detach();
+}
+
+/// Faint 2px dots (1px radius) every 22px, painted behind content. Place as the first, absolutely
 /// positioned child of a relative container.
 pub(crate) fn dot_grid() -> impl IntoElement {
     canvas(
@@ -199,10 +218,13 @@ pub(crate) fn dot_grid() -> impl IntoElement {
             for row in 0..rows {
                 for col in 0..cols {
                     let origin = point(
-                        bounds.origin.x + px(half + col as f32 * step),
-                        bounds.origin.y + px(half + row as f32 * step),
+                        bounds.origin.x + px(half + col as f32 * step - 1.0),
+                        bounds.origin.y + px(half + row as f32 * step - 1.0),
                     );
-                    window.paint_quad(gpui::fill(Bounds::new(origin, size(px(1.), px(1.))), color));
+                    window.paint_quad(
+                        gpui::fill(Bounds::new(origin, size(px(2.), px(2.))), color)
+                            .corner_radii(px(1.)),
+                    );
                 }
             }
         },
@@ -248,7 +270,7 @@ pub(crate) fn segmented<const N: usize>(
                 .items_center()
                 .h(px(26.))
                 .px(px(12.))
-                .rounded(px(5.))
+                .rounded(px(8.))
                 .text_size(px(12.5))
                 .font_weight(FontWeight::MEDIUM)
                 .cursor_pointer()

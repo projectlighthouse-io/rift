@@ -181,6 +181,12 @@ impl TableView {
         };
         view.add_filter(initial, window, cx);
         view.reload(cx);
+        // Dev check: `RIFT_DEV_OPEN=structure|stats` opens that view once the table has loaded.
+        crate::ui::dev_open(window, cx, |this: &mut Self, open, window, cx| match open {
+            "structure" => this.open_structure(window, cx),
+            "stats" => this.toggle_stats(2, window, cx),
+            _ => {}
+        });
         view
     }
 
@@ -499,7 +505,7 @@ impl TableView {
                     .mt(px(30.))
                     .w(px(170.))
                     .p(px(4.))
-                    .rounded(px(6.))
+                    .rounded(px(8.))
                     .bg(c(theme::BG))
                     .border_1()
                     .border_color(c(theme::LINE))
@@ -516,7 +522,7 @@ impl TableView {
                             .px(px(8.))
                             .flex()
                             .items_center()
-                            .rounded(px(4.))
+                            .rounded(px(8.))
                             .text_size(px(13.))
                             .cursor_pointer()
                             .hover(|d| d.bg(c(theme::SELECTION)))
@@ -828,7 +834,7 @@ impl TableView {
                         div()
                             .w(px(160.))
                             .h(px(28.))
-                            .rounded(px(6.))
+                            .rounded(px(8.))
                             .bg(c(theme::BG))
                             .border_1()
                             .border_color(c(theme::LINE))
@@ -963,7 +969,7 @@ impl TableView {
                     .max_h(px(360.))
                     .overflow_y_scroll()
                     .p(px(4.))
-                    .rounded(px(6.))
+                    .rounded(px(8.))
                     .bg(c(theme::BG))
                     .border_1()
                     .border_color(c(theme::LINE))
@@ -981,7 +987,7 @@ impl TableView {
                             .gap(px(8.))
                             .h(px(28.))
                             .px(px(8.))
-                            .rounded(px(4.))
+                            .rounded(px(8.))
                             .cursor_pointer()
                             .hover(|d| d.bg(c(theme::SELECTION)))
                             .child(
@@ -1050,7 +1056,7 @@ impl TableView {
                     .child(
                         div()
                             .h(px(30.))
-                            .rounded(px(6.))
+                            .rounded(px(8.))
                             .bg(c(theme::BG))
                             .border_1()
                             .border_color(c(if focused { theme::ACCENT } else { theme::LINE }))

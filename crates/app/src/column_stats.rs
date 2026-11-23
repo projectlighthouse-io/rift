@@ -66,13 +66,13 @@ fn stat(label: &'static str, value: String) -> impl IntoElement {
         .gap(px(2.))
         .child(
             div()
-                .text_size(px(11.5))
-                .text_color(c(theme::MUTED))
+                .text_size(px(11.))
+                .text_color(c(theme::FAINT))
                 .child(label),
         )
         .child(
             div()
-                .text_size(px(12.5))
+                .text_size(px(13.))
                 .overflow_hidden()
                 .whitespace_nowrap()
                 .text_ellipsis()
@@ -104,11 +104,11 @@ impl Render for ColumnStatsView {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(px(12.))
+                    .gap(px(14.))
                     .child(
                         div()
                             .flex()
-                            .gap(px(12.))
+                            .gap(px(10.))
                             .child(stat("Rows", ui::thousands(r.rows)))
                             .child(stat(
                                 "Nulls",
@@ -119,11 +119,12 @@ impl Render for ColumnStatsView {
                     )
                     .child(
                         div()
-                            .text_size(px(11.5))
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::MEDIUM)
                             .text_color(c(theme::MUTED))
                             .child("Values"),
                     )
-                    .child(div().flex().flex_col().gap(px(2.)).children(
+                    .child(div().flex().flex_col().gap(px(2.)).mt(px(-6.)).children(
                         r.top.iter().enumerate().map(|(i, v)| {
                             let value = v.value.clone();
                             let share = v.count as f32 / max as f32;
@@ -132,12 +133,10 @@ impl Render for ColumnStatsView {
                                 .flex()
                                 .items_center()
                                 .gap(px(10.))
-                                .h(px(22.))
-                                .px(px(4.))
-                                .rounded(px(4.))
+                                .h(px(21.))
                                 .cursor_pointer()
-                                .hover(|d| d.bg(c(theme::SELECTION)))
-                                .text_size(px(12.5))
+                                .hover(|d| d.bg(c(theme::STRIPE)))
+                                .text_size(px(12.))
                                 .child(
                                     div()
                                         .w(px(96.))
@@ -149,14 +148,14 @@ impl Render for ColumnStatsView {
                                 .child(
                                     div()
                                         .flex_1()
-                                        .h(px(8.))
-                                        .rounded(px(2.))
-                                        .bg(c(theme::SELECTION))
+                                        .h(px(10.))
+                                        .rounded(px(3.))
+                                        .bg(c(theme::RAISED))
                                         .child(
                                             div()
                                                 .h_full()
                                                 .w(gpui::relative(share))
-                                                .rounded(px(2.))
+                                                .rounded(px(3.))
                                                 .bg(c(theme::ACCENT)),
                                         ),
                                 )
@@ -187,12 +186,13 @@ impl Render for ColumnStatsView {
             .occlude()
             .font_family(theme::SANS)
             .whitespace_normal()
-            .w(px(372.))
-            .p(px(16.))
+            .w(px(340.))
+            .px(px(16.))
+            .py(px(14.))
             .flex()
             .flex_col()
-            .gap(px(12.))
-            .rounded(px(8.))
+            .gap(px(14.))
+            .rounded(px(14.))
             .bg(c(theme::BG))
             .border_1()
             .border_color(c(theme::LINE))
@@ -250,7 +250,7 @@ impl Render for ColumnStatsView {
                     ),
             )
             .child(
-                div().text_size(px(12.)).text_color(c(theme::MUTED)).child(
+                div().text_size(px(11.5)).text_color(c(theme::FAINT)).child(
                     "Computed with one GROUP BY on the whole table, not just the loaded page.",
                 ),
             )

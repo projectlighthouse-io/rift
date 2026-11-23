@@ -377,7 +377,7 @@ fn boxed(child: impl IntoElement) -> gpui::Div {
         .items_center()
         .h(px(34.))
         .px(px(2.))
-        .rounded(px(4.))
+        .rounded(px(8.))
         .bg(c(theme::BG))
         .border_1()
         .border_color(c(theme::LINE))
@@ -409,7 +409,7 @@ impl Render for ConnectionDialog {
             "New connection"
         };
 
-        let mut body = div().flex().flex_col().gap(px(14.)).px(px(20.)).py(px(16.));
+        let mut body = div().flex().flex_col().gap(px(18.)).px(px(24.)).py(px(20.));
         body = body.child(
             row()
                 .child(column("Type", self.driver.clone()))
@@ -600,7 +600,6 @@ impl Render for ConnectionDialog {
                 ui::primary_button("save", "Save & connect")
                     .h(px(32.))
                     .px(px(14.))
-                    .rounded(px(4.))
                     .text_size(px(13.))
                     .on_click(cx.listener(|this, _, _, cx| this.save(cx))),
             );
@@ -616,7 +615,7 @@ impl Render for ConnectionDialog {
                 .bg(c(theme::BG))
                 .border_1()
                 .border_color(c(theme::LINE))
-                .rounded(px(6.))
+                .rounded(px(10.))
                 .shadow(vec![BoxShadow {
                     color: gpui::hsla(220. / 360., 0.43, 0.11, 0.18),
                     offset: point(px(0.), px(24.)),
